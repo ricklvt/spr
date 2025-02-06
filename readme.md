@@ -188,6 +188,7 @@ User specific configuration is saved to .spr.yml in the user home directory.
 | preserveTitleAndBody | bool | false   | updating pull requests will not overwrite the pr title and body |
 | noRebase             | bool | false   | when true spr update will not rebase on top of origin |
 | deleteMergedBranches | bool | false   | delete branches after prs are merged |
+| prSetWorkflows       | bool | false   | enables workflows that allow for multiple sets of PRs on a single branch |
 
 Happy Coding!
 -------------
