@@ -20,15 +20,17 @@ import (
 	"github.com/ejoffe/spr/config/config_parser"
 	"github.com/ejoffe/spr/git"
 	"github.com/ejoffe/spr/github"
+	ngit "github.com/go-git/go-git/v5"
 )
 
 // NewStackedPR constructs and returns a new stackediff instance.
-func NewStackedPR(config *config.Config, github github.GitHubInterface, gitcmd git.GitInterface) *stackediff {
+func NewStackedPR(config *config.Config, github github.GitHubInterface, gitcmd git.GitInterface, repo *ngit.Repository) *stackediff {
 
 	return &stackediff{
 		config:       config,
 		github:       github,
 		gitcmd:       gitcmd,
+		repo:         repo,
 		profiletimer: profiletimer.StartNoopTimer(),
 
 		output: os.Stdout,
@@ -40,6 +42,7 @@ type stackediff struct {
 	config        *config.Config
 	github        github.GitHubInterface
 	gitcmd        git.GitInterface
+	repo          *ngit.Repository
 	profiletimer  profiletimer.Timer
 	DetailEnabled bool
 

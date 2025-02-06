@@ -31,6 +31,9 @@ type GitHubInterface interface {
 
 	// ClosePullRequest closes the given pull request
 	ClosePullRequest(ctx context.Context, pr *PullRequest)
+
+	// GetClient returns the genclient.Client
+	GetClient() genclient.Client
 }
 
 type GitHubInfo struct {

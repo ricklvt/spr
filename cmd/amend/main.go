@@ -10,6 +10,7 @@ import (
 	"github.com/ejoffe/spr/git/realgit"
 	"github.com/ejoffe/spr/github/githubclient"
 	"github.com/ejoffe/spr/spr"
+	ngit "github.com/go-git/go-git/v5"
 	"github.com/jessevdk/go-flags"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -61,8 +62,18 @@ func main() {
 	cfg := config_parser.ParseConfig(gitcmd)
 	client := githubclient.NewGitHubClient(ctx, cfg)
 	gitcmd = realgit.NewGitCmd(cfg)
+	wd, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+	repo, err := ngit.PlainOpen(wd)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
 
-	sd := spr.NewStackedPR(cfg, client, gitcmd)
+	sd := spr.NewStackedPR(cfg, client, gitcmd, repo)
 	sd.AmendCommit(ctx)
 
 	if opts.Update {

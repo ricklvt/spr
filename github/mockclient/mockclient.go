@@ -124,6 +124,11 @@ func (c *MockClient) ClosePullRequest(ctx context.Context, pr *github.PullReques
 	})
 }
 
+func (c *MockClient) GetClient() genclient.Client {
+	// This client can't be used it is just to satisfy the interface
+	return genclient.NewClient("", nil)
+}
+
 func (c *MockClient) ExpectGetInfo() {
 	c.expectMutex.Lock()
 	defer c.expectMutex.Unlock()

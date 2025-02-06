@@ -685,6 +685,10 @@ func (c *client) ClosePullRequest(ctx context.Context, pr *github.PullRequest) {
 	}
 }
 
+func (c *client) GetClient() genclient.Client {
+	return c.api
+}
+
 func check(err error) {
 	if err != nil {
 		msg := err.Error()

@@ -11,6 +11,7 @@ import (
 	"github.com/ejoffe/spr/git/realgit"
 	"github.com/ejoffe/spr/github/githubclient"
 	"github.com/ejoffe/spr/spr"
+	ngit "github.com/go-git/go-git/v5"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -47,10 +48,20 @@ func main() {
 		os.Exit(2)
 	}
 	gitcmd = realgit.NewGitCmd(cfg)
+	wd, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+	repo, err := ngit.PlainOpen(wd)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
 
 	ctx := context.Background()
 	client := githubclient.NewGitHubClient(ctx, cfg)
-	stackedpr := spr.NewStackedPR(cfg, client, gitcmd)
+	stackedpr := spr.NewStackedPR(cfg, client, gitcmd, repo)
 
 	detailFlag := &cli.BoolFlag{
 		Name:  "detail",
