@@ -21,16 +21,18 @@ import (
 	"github.com/ejoffe/spr/git"
 	"github.com/ejoffe/spr/github"
 	ngit "github.com/go-git/go-git/v5"
+	gogithub "github.com/google/go-github/v69/github"
 )
 
 // NewStackedPR constructs and returns a new stackediff instance.
-func NewStackedPR(config *config.Config, github github.GitHubInterface, gitcmd git.GitInterface, repo *ngit.Repository) *stackediff {
+func NewStackedPR(config *config.Config, github github.GitHubInterface, gitcmd git.GitInterface, repo *ngit.Repository, goghclient *gogithub.Client) *stackediff {
 
 	return &stackediff{
 		config:       config,
 		github:       github,
 		gitcmd:       gitcmd,
 		repo:         repo,
+		goghclient:   goghclient,
 		profiletimer: profiletimer.StartNoopTimer(),
 
 		output: os.Stdout,
@@ -43,6 +45,7 @@ type stackediff struct {
 	github        github.GitHubInterface
 	gitcmd        git.GitInterface
 	repo          *ngit.Repository
+	goghclient    *gogithub.Client
 	profiletimer  profiletimer.Timer
 	DetailEnabled bool
 

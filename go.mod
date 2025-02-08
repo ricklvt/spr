@@ -1,11 +1,14 @@
 module github.com/ejoffe/spr
 
-go 1.21
+go 1.22.0
+
+toolchain go1.23.6
 
 require (
 	github.com/ejoffe/profiletimer v0.1.0
 	github.com/ejoffe/rake v0.2.7
 	github.com/go-git/go-git/v5 v5.13.2
+	github.com/google/go-github/v69 v69.0.0
 	github.com/google/uuid v1.3.0
 	github.com/inigolabs/fezzik v0.4.10
 	github.com/jessevdk/go-flags v1.5.0
@@ -36,6 +39,7 @@ require (
 	github.com/go-git/go-billy/v5 v5.6.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/hasura/go-graphql-client v0.9.3 // indirect
 	github.com/iancoleman/strcase v0.2.0 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect

@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/ejoffe/spr/config"
 	"github.com/ejoffe/spr/git"
 	"github.com/ejoffe/spr/github"
@@ -22,101 +20,6 @@ import (
 )
 
 //go:generate go run github.com/inigolabs/fezzik --config fezzik.yaml
-
-// hub cli config (https://hub.github.com)
-type hubCLIConfig map[string][]struct {
-	User       string `yaml:"user"`
-	OauthToken string `yaml:"oauth_token"`
-	Protocol   string `yaml:"protocol"`
-}
-
-// readHubCLIConfig finds and deserialized the config file for
-// Github's "hub" CLI (https://hub.github.com/).
-func readHubCLIConfig() (hubCLIConfig, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	f, err := os.Open(path.Join(homeDir, ".config", "hub"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to open hub config file: %w", err)
-	}
-
-	var cfg hubCLIConfig
-	if err := yaml.NewDecoder(f).Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse hub config file: %w", err)
-	}
-
-	return cfg, nil
-}
-
-// gh cli config (https://cli.github.com)
-type ghCLIConfig map[string]struct {
-	User        string `yaml:"user"`
-	OauthToken  string `yaml:"oauth_token"`
-	GitProtocol string `yaml:"git_protocol"`
-}
-
-func readGhCLIConfig() (*ghCLIConfig, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	f, err := os.Open(path.Join(homeDir, ".config", "gh", "hosts.yml"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to open gh cli config file: %w", err)
-	}
-
-	var cfg ghCLIConfig
-	if err := yaml.NewDecoder(f).Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse hub config file: %w", err)
-	}
-
-	return &cfg, nil
-}
-
-func findToken(githubHost string) string {
-	// Try environment variable first
-	token := os.Getenv("GITHUB_TOKEN")
-	if token != "" {
-		return token
-	}
-
-	// Try ~/.config/gh/hosts.yml
-	cfg, err := readGhCLIConfig()
-	if err != nil {
-		log.Warn().Err(err).Msg("failed to read gh cli config file")
-	} else {
-		for host, user := range *cfg {
-			if host == githubHost {
-				return user.OauthToken
-			}
-		}
-	}
-
-	// Try ~/.config/hub
-	hubCfg, err := readHubCLIConfig()
-	if err != nil {
-		log.Warn().Err(err).Msg("failed to read hub config file")
-		return ""
-	}
-
-	if c, ok := hubCfg["github.com"]; ok {
-		if len(c) == 0 {
-			log.Warn().Msg("no token found in hub config file")
-			return ""
-		}
-		if len(c) > 1 {
-			log.Warn().Msgf("multiple tokens found in hub config file, using first one: %s", c[0].User)
-		}
-
-		return c[0].OauthToken
-	}
-
-	return ""
-}
 
 const tokenHelpText = `
 No GitHub OAuth token found! You can either create one
@@ -137,7 +40,7 @@ so if you already use that, spr will automatically pick up your token.
 `
 
 func NewGitHubClient(ctx context.Context, config *config.Config) *client {
-	token := findToken(config.Repo.GitHubHost)
+	token := github.FindToken(config.Repo.GitHubHost)
 	if token == "" {
 		fmt.Printf(tokenHelpText, config.Repo.GitHubHost)
 		os.Exit(3)

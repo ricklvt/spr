@@ -9,9 +9,11 @@ import (
 	"github.com/ejoffe/spr/config"
 	"github.com/ejoffe/spr/config/config_parser"
 	"github.com/ejoffe/spr/git/realgit"
+	"github.com/ejoffe/spr/github"
 	"github.com/ejoffe/spr/github/githubclient"
 	"github.com/ejoffe/spr/spr"
 	ngit "github.com/go-git/go-git/v5"
+	gogithub "github.com/google/go-github/v69/github"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -58,10 +60,11 @@ func main() {
 		fmt.Println(err)
 		os.Exit(2)
 	}
+	goghclient := gogithub.NewClient(nil).WithAuthToken(github.FindToken(cfg.Repo.GitHubHost))
 
 	ctx := context.Background()
 	client := githubclient.NewGitHubClient(ctx, cfg)
-	stackedpr := spr.NewStackedPR(cfg, client, gitcmd, repo)
+	stackedpr := spr.NewStackedPR(cfg, client, gitcmd, repo, goghclient)
 
 	detailFlag := &cli.BoolFlag{
 		Name:  "detail",

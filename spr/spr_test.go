@@ -32,7 +32,7 @@ func makeTestObjects(t *testing.T, synchronized bool) (
 		RepositoryID: "RepoID",
 		LocalBranch:  "master",
 	}
-	s = NewStackedPR(cfg, githubmock, gitmock, nil)
+	s = NewStackedPR(cfg, githubmock, gitmock, nil, nil)
 	output = &bytes.Buffer{}
 	s.output = output
 	input = &bytes.Buffer{}
