@@ -145,7 +145,11 @@ VERSION: fork of {{.Version}}
 				Aliases: []string{"s", "st"},
 				Usage:   "Show status of open pull requests",
 				Action: func(c *cli.Context) error {
-					stackedpr.StatusPullRequests(ctx)
+					if cfg.User.PRSetWorkflows {
+						stackedpr.StatusCommitsAndPRSets(ctx)
+					} else {
+						stackedpr.StatusPullRequests(ctx)
+					}
 					return nil
 				},
 				Flags: []cli.Flag{

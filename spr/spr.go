@@ -16,6 +16,7 @@ import (
 
 	"github.com/ejoffe/profiletimer"
 	"github.com/ejoffe/rake"
+	"github.com/ejoffe/spr/bl"
 	"github.com/ejoffe/spr/config"
 	"github.com/ejoffe/spr/config/config_parser"
 	"github.com/ejoffe/spr/git"
@@ -362,6 +363,29 @@ func (sd *stackediff) MergePullRequests(ctx context.Context, count *uint) {
 	sd.profiletimer.Step("MergePullRequests::End")
 }
 
+// StatusCommitsAndPRSets outputs the status of all commits and PR sets.
+// If a PR set is stored in state but no PR exists (like it was manually deleted from the github UI) then it will be
+// removed from state.
+func (sd *stackediff) StatusCommitsAndPRSets(ctx context.Context) {
+	sd.profiletimer.Step("StatusCommitsAndPRSets::Start")
+	state, err := bl.NewReadState(ctx, sd.config, sd.goghclient, sd.repo)
+	check(err)
+	sd.profiletimer.Step("StatusCommitsAndPRSets::NewReadState")
+
+	if state.Head() == nil {
+		fmt.Fprintf(sd.output, "no local commits\n")
+		return
+	}
+	if sd.DetailEnabled {
+		fmt.Fprint(sd.output, header(sd.config))
+	}
+	sd.profiletimer.Step("StatusCommitsAndPRSets::PrintDetails")
+	for this := state.Head(); this != nil; this = this.Parent {
+		fmt.Fprintf(sd.output, "%s\n", this.String(sd.config))
+	}
+	sd.profiletimer.Step("StatusCommitsAndPRSets::OutputStatus")
+}
+
 // StatusPullRequests fetches all the users pull requests from github and
 //
 //	prints out the status of each. It does not make any updates locally or
@@ -593,21 +617,43 @@ func check(err error) {
 }
 
 func header(config *config.Config) string {
-	if config.User.StatusBitsEmojis {
-		return `
+	if config.User.PRSetWorkflows {
+		if config.User.StatusBitsEmojis {
+			return `
+ ┌─ commit index
+ │  ┌─ github checks pass
+ │  │ ┌── pull request approved
+ │  │ │ ┌─── no merge conflicts
+ │  │ │ │ ┌──── stack check
+ │  │ │ │ │
+`
+		} else {
+			return `
+ ┌─ commit index
+ │  ┌─ github checks pass
+ │  │┌── pull request approved
+ │  ││┌─── no merge conflicts
+ │  │││┌──── stack check
+ │  ││││
+`
+		}
+	} else {
+		if config.User.StatusBitsEmojis {
+			return `
  ┌─ github checks pass
  │ ┌── pull request approved
  │ │ ┌─── no merge conflicts
  │ │ │ ┌──── stack check
  │ │ │ │
 `
-	} else {
-		return `
+		} else {
+			return `
  ┌─ github checks pass
  │┌── pull request approved
  ││┌─── no merge conflicts
  │││┌──── stack check
  ││││
 `
+		}
 	}
 }

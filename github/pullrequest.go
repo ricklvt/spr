@@ -2,6 +2,7 @@ package github
 
 import (
 	"fmt"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/ejoffe/spr/config"
@@ -92,10 +93,11 @@ func (pr *PullRequest) Ready(config *config.Config) bool {
 
 const (
 	// Terminal escape codes for colors
-	colorReset = "\033[0m"
-	colorRed   = "\033[31m"
-	colorGreen = "\033[32m"
-	colorBlue  = "\033[34m"
+	ColorReset     = "\033[0m"
+	ColorRed       = "\033[31m"
+	ColorGreen     = "\033[32m"
+	ColorBlue      = "\033[34m"
+	ColorLightBlue = "\033[1;34m"
 
 	// ascii status bits
 	asciiCheckmark = "v"
@@ -114,7 +116,7 @@ const (
 	emojiWarning      = "⚠️"
 )
 
-func statusBitIcons(config *config.Config) map[string]string {
+func StatusBitIcons(config *config.Config) map[string]string {
 	if config.User.StatusBitsEmojis {
 		return map[string]string{
 			"checkmark":    emojiCheckmark,
@@ -138,7 +140,7 @@ func statusBitIcons(config *config.Config) map[string]string {
 
 // StatusString returs a string representation of the merge status bits
 func (pr *PullRequest) StatusString(config *config.Config) string {
-	icons := statusBitIcons(config)
+	icons := StatusBitIcons(config)
 	statusString := "["
 
 	statusString += pr.MergeStatus.ChecksPass.String(config)
@@ -169,25 +171,40 @@ func (pr *PullRequest) StatusString(config *config.Config) string {
 	return statusString
 }
 
+func padNumber(pad int) func(string) string {
+	return func(s string) string {
+		padding := pad - len(s)
+		if padding > 0 {
+			s += strings.Repeat(" ", padding)
+		}
+		return s
+	}
+}
+
 func (pr *PullRequest) String(config *config.Config) string {
 	prStatus := pr.StatusString(config)
 	if pr.Merged {
 		prStatus = "MERGED"
 	}
 
-	prInfo := fmt.Sprintf("%3d", pr.Number)
+	padding := func(s string) string { return s }
+	if config.User.PRSetWorkflows {
+		padding = padNumber(5)
+	}
+
+	prInfo := padding(fmt.Sprintf("%3d", pr.Number))
 	if config.User.ShowPRLink {
-		prInfo = fmt.Sprintf("https://%s/%s/%s/pull/%d",
-			config.Repo.GitHubHost, config.Repo.GitHubRepoOwner, config.Repo.GitHubRepoName, pr.Number)
+		prInfo = fmt.Sprintf("https://%s/%s/%s/pull/%s",
+			config.Repo.GitHubHost, config.Repo.GitHubRepoOwner, config.Repo.GitHubRepoName, padding(fmt.Sprintf("%d", pr.Number)))
 	}
 
 	var mq string
 	if len(pr.Commits) > 1 {
-		mq = statusBitIcons(config)["warning"]
+		mq = StatusBitIcons(config)["warning"]
 	}
 
 	if pr.InQueue {
-		mq = statusBitIcons(config)["pending"]
+		mq = StatusBitIcons(config)["pending"]
 	}
 
 	if mq != "" {
@@ -196,6 +213,10 @@ func (pr *PullRequest) String(config *config.Config) string {
 
 	line := fmt.Sprintf("%s %s%s : %s", prStatus, mq, prInfo, pr.Title)
 
+	return TrimToTerminal(config, line)
+}
+
+func TrimToTerminal(config *config.Config, line string) string {
 	// trim line to terminal width
 	terminalWidth, err := terminal.Width()
 	if err != nil {
@@ -215,7 +236,7 @@ func (pr *PullRequest) String(config *config.Config) string {
 }
 
 func (cs checkStatus) String(config *config.Config) string {
-	icons := statusBitIcons(config)
+	icons := StatusBitIcons(config)
 	if config.Repo.RequireChecks {
 		switch cs {
 		case CheckStatusUnknown:
