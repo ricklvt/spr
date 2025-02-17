@@ -60,6 +60,8 @@ type InternalState struct {
 
 	Stargazer bool `default:"false" yaml:"stargazer"`
 	RunCount  int  `default:"0" yaml:"runcount"`
+	// Maps the repo name to a map of commitIds to the PRSet index
+	RepoToCommitIdToPRSet map[string]map[string]int
 }
 
 func EmptyConfig() *Config {
@@ -67,7 +69,8 @@ func EmptyConfig() *Config {
 		Repo: &RepoConfig{},
 		User: &UserConfig{},
 		State: &InternalState{
-			MergeCheckCommit: map[string]string{},
+			MergeCheckCommit:      map[string]string{},
+			RepoToCommitIdToPRSet: map[string]map[string]int{},
 		},
 	}
 }

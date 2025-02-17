@@ -5,6 +5,7 @@ go 1.22.0
 toolchain go1.23.6
 
 require (
+	github.com/deckarep/golang-set/v2 v2.7.0
 	github.com/ejoffe/profiletimer v0.1.0
 	github.com/ejoffe/rake v0.2.7
 	github.com/go-git/go-git/v5 v5.13.2

@@ -32,6 +32,10 @@ type PRCommit struct {
 
 	// The index is a simple way of referring to a commit. Child commits have larger indices.
 	Index int
+
+	// The PRIndex is a simple way of referring to a set of Pull Requests. A nil PRIndex indicates that the commit doesn't
+	// have a PR (that was created by spr).
+	PRIndex *int
 }
 
 // State holds the state of the local commits and PRs
@@ -46,24 +50,29 @@ type PullRequestStatus struct {
 	Reviews        []*gogithub.PullRequestReview
 }
 
-func (prc PRCommit) String(config *config.Config) string {
-	if prc.PullRequest != nil {
-		return fmt.Sprintf("%s%2d%s %s",
-			github.ColorLightBlue,
-			prc.Index,
-			github.ColorReset,
-			prc.PullRequest.String(config),
-		)
+func indexColor(i *int) string {
+	if i == nil {
+		return github.ColorBlue
 	}
+	switch *i % 4 {
+	case 0:
+		return github.ColorRed
+	case 1:
+		return github.ColorGreen
+	case 2:
+		return github.ColorBlue
+	case 3:
+		return github.ColorLightBlue
+	}
+	return github.ColorReset
+}
+
+func (prc PRCommit) String(config *config.Config) string {
 	noPrMessage := "No Pull Request Created"
 	tempPrRemainingLen := 36
-
 	empty := github.StatusBitIcons(config)["empty"]
 
-	line := fmt.Sprintf("%s%2d%s [%s%s%s%s] %s%s : %s",
-		github.ColorLightBlue,
-		prc.Index,
-		github.ColorReset,
+	prString := fmt.Sprintf("[%s%s%s%s] %s%s : %s",
 		empty,
 		empty,
 		empty,
@@ -72,6 +81,26 @@ func (prc PRCommit) String(config *config.Config) string {
 		strings.Repeat(" ", tempPrRemainingLen),
 		prc.Commit.Subject,
 	)
+
+	if prc.PullRequest != nil {
+		prString = prc.PullRequest.String(config)
+	}
+
+	prIndex := "--"
+	if prc.PRIndex != nil {
+		prIndex = fmt.Sprintf("s%d", *prc.PRIndex)
+	}
+
+	line := fmt.Sprintf("%s%2d%s %s%s%s %s",
+		github.ColorLightBlue,
+		prc.Index,
+		github.ColorReset,
+		indexColor(prc.PRIndex),
+		prIndex,
+		github.ColorReset,
+		prString,
+	)
+
 	return github.TrimToTerminal(config, line)
 }
 
@@ -166,6 +195,7 @@ func NewState(
 	for _, gitCommit := range gitCommits {
 		gitCommit.PullRequest = prMap[gitCommit.CommitID]
 	}
+
 	SetStackedCheck(config, gitCommits)
 
 	return &State{Commits: gitCommits}, nil
@@ -293,9 +323,11 @@ func GenerateCommits(commits []*object.Commit) []*PRCommit {
 
 	var child *PRCommit
 	for i, cm := range commits {
+		commitId := CommitId(cm.Message)
+
 		c := &PRCommit{
 			Commit: git.Commit{
-				CommitID:   CommitId(cm.Message),
+				CommitID:   commitId,
 				CommitHash: cm.Hash.String(),
 				Subject:    Subject(cm.Message),
 				Body:       Body(cm.Message),
@@ -305,6 +337,7 @@ func GenerateCommits(commits []*object.Commit) []*PRCommit {
 			Parent:      nil,
 			PullRequest: nil,
 			Index:       len(commits) - (i + 1),
+			PRIndex:     nil,
 		}
 		// Point the previous one to us
 		if child != nil {
@@ -313,6 +346,7 @@ func GenerateCommits(commits []*object.Commit) []*PRCommit {
 		gitCommits = append(gitCommits, c)
 		child = c
 	}
+
 	return gitCommits
 }
 

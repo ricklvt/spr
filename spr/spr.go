@@ -621,20 +621,22 @@ func header(config *config.Config) string {
 		if config.User.StatusBitsEmojis {
 			return `
  ┌─ commit index
- │  ┌─ github checks pass
- │  │ ┌── pull request approved
- │  │ │ ┌─── no merge conflicts
- │  │ │ │ ┌──── stack check
- │  │ │ │ │
+ │ ┌─ pull request set index
+ │ │   ┌─ github checks pass
+ │ │   │ ┌── pull request approved
+ │ │   │ │ ┌─── no merge conflicts
+ │ │   │ │ │ ┌──── stack check
+ │ │   │ │ │ │
 `
 		} else {
 			return `
  ┌─ commit index
- │  ┌─ github checks pass
- │  │┌── pull request approved
- │  ││┌─── no merge conflicts
- │  │││┌──── stack check
- │  ││││
+ │ ┌─ pull request set index
+ │ │   ┌─ github checks pass
+ │ │   │┌── pull request approved
+ │ │   ││┌─── no merge conflicts
+ │ │   │││┌──── stack check
+ │ │   ││││
 `
 		}
 	} else {

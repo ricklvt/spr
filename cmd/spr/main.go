@@ -237,6 +237,8 @@ VERSION: fork of {{.Version}}
 			},
 		},
 		After: func(c *cli.Context) error {
+			rake.LoadSources(cfg.State,
+				rake.YamlFileWriter(config_parser.InternalConfigFilePath()))
 			if c.IsSet("profile") {
 				stackedpr.ProfilingSummary()
 			}

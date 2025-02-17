@@ -12,7 +12,8 @@ func TestEmptyConfig(t *testing.T) {
 		Repo: &RepoConfig{},
 		User: &UserConfig{},
 		State: &InternalState{
-			MergeCheckCommit: map[string]string{},
+			MergeCheckCommit:      map[string]string{},
+			RepoToCommitIdToPRSet: map[string]map[string]int{},
 		},
 	}
 	actual := EmptyConfig()
@@ -43,7 +44,8 @@ func TestDefaultConfig(t *testing.T) {
 			StatusBitsEmojis: true,
 		},
 		State: &InternalState{
-			MergeCheckCommit: map[string]string{},
+			MergeCheckCommit:      map[string]string{},
+			RepoToCommitIdToPRSet: map[string]map[string]int{},
 		},
 	}
 	actual := DefaultConfig()
