@@ -7,7 +7,9 @@ import (
 	"slices"
 	"strings"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ejoffe/spr/bl/gitapi"
+	"github.com/ejoffe/spr/bl/maputils"
 	"github.com/ejoffe/spr/config"
 	"github.com/ejoffe/spr/git"
 	"github.com/ejoffe/spr/github"
@@ -41,7 +43,8 @@ type PRCommit struct {
 // State holds the state of the local commits and PRs
 type State struct {
 	// The 0th commit in this slice is the HEAD commit
-	Commits []*PRCommit
+	Commits     []*PRCommit
+	OrphanedPRs mapset.Set[*github.PullRequest]
 }
 
 type PullRequestStatus struct {
@@ -191,14 +194,57 @@ func NewState(
 ) (*State, error) {
 
 	prMap := GeneratePullRequestMap(prss)
+
 	gitCommits := GenerateCommits(commits)
 	for _, gitCommit := range gitCommits {
 		gitCommit.PullRequest = prMap[gitCommit.CommitID]
 	}
 
+	orphanedPRs := AssignPullRequests(config, gitCommits, prMap)
+
 	SetStackedCheck(config, gitCommits)
 
-	return &State{Commits: gitCommits}, nil
+	return &State{
+		Commits:     gitCommits,
+		OrphanedPRs: orphanedPRs,
+	}, nil
+}
+
+func AssignPullRequests(
+	config *config.Config,
+	gitCommits []*PRCommit,
+	prMap map[string]*github.PullRequest,
+) mapset.Set[*github.PullRequest] {
+	// Add unused PRs to the orphans list
+	prGCMap := maputils.NewGC(prMap)
+	// Get the mapping of commitIds to PR Set
+	prSetMap, ok := config.State.RepoToCommitIdToPRSet[config.Repo.GitHubRepoName]
+	if !ok {
+		prSetMap = map[string]int{}
+	}
+	// Purge any mappings that aren't used
+	purgeMap := maputils.NewGC(prSetMap)
+
+	for _, gitCommit := range gitCommits {
+		if pr, ok := prGCMap.Lookup(gitCommit.CommitID); ok {
+			var prIndexPtr *int
+			if prIndex, ok := purgeMap.Lookup(gitCommit.CommitID); ok {
+				prIndexPtr = &prIndex
+			}
+			gitCommit.PRIndex = prIndexPtr
+			gitCommit.PullRequest = pr
+			pr.Commit = gitCommit.Commit
+		}
+	}
+
+	orphanedPrs := mapset.NewSet[*github.PullRequest]()
+	for _, v := range prGCMap.GetUnaccessed() {
+		orphanedPrs.Add(v)
+	}
+
+	config.State.RepoToCommitIdToPRSet[config.Repo.GitHubRepoName] = purgeMap.PurgeUnaccessed()
+
+	return orphanedPrs
 }
 
 func SetStackedCheck(config *config.Config, gitCommits []*PRCommit) {

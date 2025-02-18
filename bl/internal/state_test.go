@@ -3,6 +3,8 @@ package internal_test
 import (
 	"testing"
 
+	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/ejoffe/spr/bl/internal"
 	bl "github.com/ejoffe/spr/bl/internal"
 	"github.com/ejoffe/spr/config"
 	"github.com/ejoffe/spr/git"
@@ -12,6 +14,75 @@ import (
 	gogithub "github.com/google/go-github/v69/github"
 	"github.com/stretchr/testify/require"
 )
+
+func TestAssignPullRequests(t *testing.T) {
+	config := config.EmptyConfig()
+	config.Repo.GitHubRepoName = t.Name()
+	config.State.RepoToCommitIdToPRSet[t.Name()] = map[string]int{
+		"11111111": 1,
+		"22222222": 0,
+		"99999999": 9,
+	}
+	gitCommits := []*internal.PRCommit{
+		{
+			Commit: git.Commit{
+				CommitHash: "H1111111",
+				CommitID:   "11111111",
+			},
+		},
+		{
+			Commit: git.Commit{
+				CommitHash: "H2222222",
+				CommitID:   "22222222",
+			},
+		},
+		{
+			Commit: git.Commit{
+				CommitHash: "H3333333",
+				CommitID:   "33333333",
+			},
+		},
+	}
+
+	prMap := map[string]*github.PullRequest{
+		"11111111": {
+			ID: "1",
+		},
+		"22222222": {
+			ID: "2",
+		},
+		"99999999": {
+			ID: "9",
+		},
+	}
+
+	expectedOrphanedPRs := mapset.NewSet[*github.PullRequest]()
+	expectedOrphanedPRs.Add(prMap["99999999"])
+
+	orphanedPRs := internal.AssignPullRequests(config, gitCommits, prMap)
+
+	// The PR is set
+	require.Equal(t, "1", gitCommits[0].PullRequest.ID)
+	require.Equal(t, "2", gitCommits[1].PullRequest.ID)
+	require.Nil(t, gitCommits[2].PullRequest)
+
+	// The PRIndex is set
+	require.Equal(t, 1, *gitCommits[0].PRIndex)
+	require.Equal(t, 0, *gitCommits[1].PRIndex)
+	require.Nil(t, gitCommits[2].PRIndex)
+
+	// The PR also references the commit
+	require.Equal(t, gitCommits[0].CommitHash, gitCommits[0].PullRequest.Commit.CommitHash)
+	require.Equal(t, gitCommits[1].CommitHash, gitCommits[1].PullRequest.Commit.CommitHash)
+
+	// The extra PR is returned as orphaned
+	require.Equal(t, expectedOrphanedPRs, orphanedPRs)
+
+	// Since 99999999 isn't used it should be removed from the mapping
+	_, ok := config.State.RepoToCommitIdToPRSet[t.Name()]["99999999"]
+	require.False(t, ok)
+
+}
 
 func TestSetStackedCheck(t *testing.T) {
 	config := &config.Config{

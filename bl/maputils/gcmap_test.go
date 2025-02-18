@@ -20,10 +20,16 @@ func TestNewGCLookupAndPurgeUnaccessed(t *testing.T) {
 		"c": 2,
 	}
 
+	unaccessed := map[string]int{
+		"b": 1,
+		"d": 3,
+	}
+
 	purgeMap := maputils.NewGC(all)
 	purgeMap.Lookup("a")
 	purgeMap.Lookup("c")
 	purgeMap.Lookup("x")
 
+	require.Equal(t, unaccessed, purgeMap.GetUnaccessed())
 	require.Equal(t, accessed, purgeMap.PurgeUnaccessed())
 }
