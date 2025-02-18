@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/ejoffe/spr/bl/concurrent"
 	"github.com/ejoffe/spr/bl/gitapi"
 	"github.com/ejoffe/spr/bl/maputils"
 	"github.com/ejoffe/spr/config"
@@ -136,24 +137,41 @@ func NewReadState(ctx context.Context, config *config.Config, goghclient *gogith
 		return nil, fmt.Errorf("getting pull requests for %s/%s: %w", repoOwner, repoName, err)
 	}
 
-	prss := make([]PullRequestStatus, 0, len(prs))
-	for _, pr := range prs {
-		combinedStatus, _, err := goghclient.Repositories.GetCombinedStatus(ctx, repoOwner, repoName, *pr.Head.SHA, nil)
+	prss, err := concurrent.SliceMap(prs, func(pr *gogithub.PullRequest) (PullRequestStatus, error) {
+		getCombinedAwait := concurrent.Async5Ret3(
+			goghclient.Repositories.GetCombinedStatus,
+			ctx, repoOwner, repoName, *pr.Head.SHA, nil,
+		)
+
+		prListReviewsAwait := concurrent.Async5Ret3(
+			goghclient.PullRequests.ListReviews,
+			ctx, repoOwner, repoName, *pr.Number, nil,
+		)
+
+		prGetAwait := concurrent.Async4Ret3(
+			goghclient.PullRequests.Get,
+			ctx, repoOwner, repoName, *pr.Number,
+		)
+
+		combinedStatus, _, err := getCombinedAwait.Await()
 		if err != nil {
-			return nil, fmt.Errorf("getting combined status for %s/%s PR:%d: %w", repoOwner, repoName, *pr.Number, err)
+			return PullRequestStatus{}, fmt.Errorf("getting combined status for %s/%s PR:%d: %w", repoOwner, repoName, *pr.Number, err)
 		}
 
-		reviews, _, err := goghclient.PullRequests.ListReviews(ctx, repoOwner, repoName, *pr.Number, nil)
+		reviews, _, err := prListReviewsAwait.Await()
 		if err != nil {
-			return nil, fmt.Errorf("getting pull request reviews for %s/%s PR:%d: %w", repoOwner, repoName, *pr.Number, err)
+			return PullRequestStatus{}, fmt.Errorf("getting pull request reviews for %s/%s PR:%d: %w", repoOwner, repoName, *pr.Number, err)
 		}
 
-		pr, _, err = goghclient.PullRequests.Get(ctx, repoOwner, repoName, *pr.Number)
+		pr, _, err = prGetAwait.Await()
 		if err != nil {
-			return nil, fmt.Errorf("getting pull request details for %s/%s PR:%d: %w", repoOwner, repoName, *pr.Number, err)
+			return PullRequestStatus{}, fmt.Errorf("getting pull request details for %s/%s PR:%d: %w", repoOwner, repoName, *pr.Number, err)
 		}
 
-		prss = append(prss, PullRequestStatus{PullRequest: pr, CombinedStatus: combinedStatus, Reviews: reviews})
+		return PullRequestStatus{PullRequest: pr, CombinedStatus: combinedStatus, Reviews: reviews}, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	headRef, err := repo.Head()
