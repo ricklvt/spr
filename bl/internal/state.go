@@ -41,6 +41,12 @@ type PRCommit struct {
 	PRIndex *int
 }
 
+// Indices is a list of commit indices and the destination pull request set index
+type Indices struct {
+	DestinationPRIndex *int            // Matches PRCommit.PRIndex
+	CommitIndexes      mapset.Set[int] // Matches PRCommit.Index
+}
+
 // State holds the state of the local commits and PRs
 type State struct {
 	// The 0th commit in this slice is the HEAD commit
