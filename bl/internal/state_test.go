@@ -119,6 +119,136 @@ func TestSetStackedCheck(t *testing.T) {
 	require.False(t, commits[0].PullRequest.MergeStatus.Stacked)
 }
 
+func TestApplyIndicies(t *testing.T) {
+	// Define the PRs here so the pointer value will be consistent between calls of testingState
+	// this allow us to compare sets containing &github.PullRequest
+	pr0 := &github.PullRequest{ID: "0"}
+	pr1 := &github.PullRequest{ID: "1"}
+	pr2 := &github.PullRequest{ID: "2"}
+	pr3 := &github.PullRequest{ID: "3"}
+	testingState := func() *internal.State {
+		gitCommits := []*internal.PRCommit{
+			{
+				Index:       0,
+				PRIndex:     gogithub.Ptr(0),
+				PullRequest: pr0,
+			},
+			{
+				Index:       1,
+				PRIndex:     gogithub.Ptr(0),
+				PullRequest: pr1,
+			},
+			{
+				Index:       2,
+				PRIndex:     gogithub.Ptr(1),
+				PullRequest: pr2,
+			},
+			{
+				Index:       3,
+				PRIndex:     gogithub.Ptr(2),
+				PullRequest: pr3,
+			},
+			{
+				Index: 4,
+			},
+		}
+		return &internal.State{
+			Commits:       gitCommits,
+			OrphanedPRs:   mapset.NewSet[*github.PullRequest](),
+			MutatedPRSets: mapset.NewSet[int](),
+		}
+	}
+
+	tests := []struct {
+		desc                       string
+		destinationPRIndex         *int
+		commitIndex                mapset.Set[int]
+		expectedState              func() *internal.State
+		expectedDestinationPRINdex *int
+	}{
+		{
+			desc:               "apply to un-PRs commit",
+			destinationPRIndex: nil,
+			commitIndex:        mapset.NewSet[int](4),
+			expectedState: func() *internal.State {
+				state := testingState()
+				state.Commits[4].PRIndex = gogithub.Ptr(3)
+				state.MutatedPRSets = mapset.NewSet[int](3)
+				return state
+			},
+			expectedDestinationPRINdex: gogithub.Ptr(3),
+		}, {
+			desc:               "no-op - update with same PR",
+			destinationPRIndex: gogithub.Ptr(1),
+			commitIndex:        mapset.NewSet[int](2),
+			expectedState: func() *internal.State {
+				state := testingState()
+				return state
+			},
+			expectedDestinationPRINdex: gogithub.Ptr(1),
+		}, {
+			desc:               "no-op, - no commits are part of a new PR set",
+			destinationPRIndex: nil,
+			commitIndex:        mapset.NewSet[int](),
+			expectedState: func() *internal.State {
+				state := testingState()
+				return state
+			},
+			expectedDestinationPRINdex: nil,
+		}, {
+			desc:               "merge two PR sets, only needs to mutate the updated set (not the deleted set)",
+			destinationPRIndex: gogithub.Ptr(1),
+			commitIndex:        mapset.NewSet[int](2, 3),
+			expectedState: func() *internal.State {
+				state := testingState()
+				state.Commits[3].PRIndex = gogithub.Ptr(1)
+				state.MutatedPRSets = mapset.NewSet[int](1) // Don't need to mutate PRSet 2 as it's been replaced
+				return state
+			},
+			expectedDestinationPRINdex: gogithub.Ptr(1),
+		}, {
+			desc:               "split a PR set needs both PR sets updated",
+			destinationPRIndex: nil,
+			commitIndex:        mapset.NewSet[int](0),
+			expectedState: func() *internal.State {
+				state := testingState()
+				state.Commits[0].PRIndex = gogithub.Ptr(3)
+				state.MutatedPRSets = mapset.NewSet[int](0, 3)
+				return state
+			},
+			expectedDestinationPRINdex: gogithub.Ptr(3),
+		}, {
+			desc:               "deleting a PR set adds the existing PRs to the OrphanedPRs",
+			destinationPRIndex: gogithub.Ptr(0),
+			commitIndex:        mapset.NewSet[int](),
+			expectedState: func() *internal.State {
+				state := testingState()
+				state.Commits[0].PRIndex = nil
+				state.Commits[1].PRIndex = nil
+				state.OrphanedPRs.Add(state.Commits[0].PullRequest)
+				state.OrphanedPRs.Add(state.Commits[1].PullRequest)
+				return state
+			},
+			expectedDestinationPRINdex: gogithub.Ptr(0),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			state := testingState()
+			indices := internal.Indices{DestinationPRIndex: test.destinationPRIndex, CommitIndexes: test.commitIndex}
+			state.ApplyIndices(&indices)
+
+			require.Equal(t, test.expectedState(), state)
+			if test.expectedDestinationPRINdex == nil {
+				require.Nil(t, indices.DestinationPRIndex)
+			} else {
+				require.Equal(t, *test.expectedDestinationPRINdex, *indices.DestinationPRIndex)
+			}
+		})
+	}
+}
+
 func TestGeneratePullRequestMap(t *testing.T) {
 	t.Run("handles no PRs", func(t *testing.T) {
 		prMap := bl.GeneratePullRequestMap([]bl.PullRequestStatus{})
