@@ -212,14 +212,64 @@ func (gapi GitApi) BranchExists(branchName string) (bool, error) {
 	return branchExists, nil
 }
 
+func (gapi GitApi) CreatePullRequest(
+	ctx context.Context,
+	commit git.Commit,
+	prevCommit *git.Commit,
+) (*github.PullRequest, error) {
+
+	headRefName, baseRefName := gapi.getBranches(commit, prevCommit)
+
+	body, err := gapi.getBody(commit, nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting body %w", err)
+	}
+
+	owner := gapi.config.Repo.GitHubRepoOwner
+	repoName := gapi.config.Repo.GitHubRepoName
+
+	resp, _, err := gapi.goghclient.PullRequests.Create(ctx, owner, repoName, &gogithub.NewPullRequest{
+		Title:    &commit.Subject,
+		Head:     &headRefName,
+		HeadRepo: &gapi.config.Repo.GitHubRepoName,
+		Base:     &baseRefName,
+		Body:     &body,
+		Draft:    gogithub.Ptr(false), // We always create draft PRs then we do an update (to link them together) with an update.
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating PR for commit %s: %w", commit.CommitHash, err)
+	}
+
+	pr := &github.PullRequest{
+		ID:         strconv.FormatInt(*resp.ID, 10),
+		Number:     *resp.Number,
+		FromBranch: headRefName,
+		ToBranch:   baseRefName,
+		Commit:     commit,
+		Title:      commit.Subject,
+		MergeStatus: github.PullRequestMergeStatus{
+			ChecksPass:     github.CheckStatusUnknown,
+			ReviewApproved: false,
+			NoConflicts:    false,
+			Stacked:        false,
+		},
+	}
+
+	return pr, nil
+}
+
+// UpdatePullRequest - updates an existing PR.
+// pullRequests is used to create links to related pull requests
+// prevCommit is used to compute the destination branch name.
 func (gapi GitApi) UpdatePullRequest(
 	ctx context.Context,
 	pullRequests []*github.PullRequest,
 	pr *github.PullRequest,
 	commit git.Commit,
 	prevCommit *git.Commit,
-	updateToMain bool,
 ) error {
+	return gapi.updatePullRequest(ctx, pullRequests, pr, commit, prevCommit)
+}
 
 // UpdatePullRequestToMain - updates an existing PR to merge into main/master
 // pullRequests is used to create links to related pull requests

@@ -464,6 +464,44 @@ func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
 	}
 	sd.profiletimer.Step("UpdatePRSets::UpdateAllBranches")
 
+	// Update PR sets for all impacted mutated PR sets.
+	for prSet := range state.MutatedPRSets.Iter() {
+		commits := state.CommitsByPRSet(prSet)
+		// We want the oldest first so we create PRs for it first
+		slices.Reverse(commits)
+
+		// Create new PRs that are missing for the impacted PR set
+		// For now we just create a PR simple PR without linking PRs to each other as there could be other missing PRs so we
+		// can't link to a missing PR. Once all PRs have been created we will update them.
+		// We don't want to do this in parallel as we want the PR numbers to be sequential starting with the oldest first.
+		for cindex, ci := range commits {
+			if ci.PullRequest != nil {
+				continue
+			}
+			var parentBaseCommit *git.Commit
+			if cindex != 0 {
+				parentBaseCommit = &commits[cindex-1].Commit
+			}
+
+			pr, err := gitapi.CreatePullRequest(ctx, ci.Commit, parentBaseCommit)
+			check(err)
+			ci.PullRequest = pr
+		}
+
+		// All commits should now have PRs
+		pullRequests := bl.PullRequests(commits)
+
+		_, err = concurrent.SliceMapWithIndex(commits, func(cindex int, ci *bl.PRCommit) (struct{}, error) {
+			var parentBaseCommit *git.Commit
+			if cindex != 0 {
+				parentBaseCommit = &commits[cindex-1].Commit
+			}
+			err := gitapi.UpdatePullRequest(ctx, pullRequests, ci.PullRequest, ci.Commit, parentBaseCommit)
+			return struct{}{}, err
+		})
+	}
+	sd.profiletimer.Step("UpdatePRSets::Update/CreatePRSets")
+
 	// Update persistent PR set state
 	// Display status
 }
