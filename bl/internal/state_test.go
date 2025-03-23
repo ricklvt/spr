@@ -545,6 +545,70 @@ func TestGenerateCommits_LinksCommitsAndSetsIndicies(t *testing.T) {
 	require.Equal(t, "11111111", commits[0].Parent.Parent.Child.Child.CommitID)
 }
 
+func TestUpdatePRSetState(t *testing.T) {
+	config := config.EmptyConfig()
+	config.Repo.GitHubRepoName = t.Name()
+	config.State.RepoToCommitIdToPRSet["other"] = map[string]int{
+		"44444444": 4,
+	}
+	config.State.RepoToCommitIdToPRSet[t.Name()] = map[string]int{
+		"11111111": 1,
+		"22222222": 0,
+		"99999999": 9,
+	}
+
+	testingCommits := []*internal.PRCommit{
+		{
+			Commit: git.Commit{
+				CommitID: "11111111",
+			},
+			PRIndex: gogithub.Ptr(0),
+		},
+		{
+			Commit: git.Commit{
+				CommitID: "22222222",
+			},
+			PRIndex: gogithub.Ptr(0),
+		},
+		{
+			Commit: git.Commit{
+				CommitID: "33333333",
+			},
+			PRIndex: gogithub.Ptr(1),
+		},
+		{
+			Commit: git.Commit{
+				CommitID: "44444444",
+			},
+			PRIndex: gogithub.Ptr(2),
+		},
+		{
+			Commit: git.Commit{
+				CommitID: "55555555",
+			},
+		},
+	}
+
+	expectedStateMap := map[string]map[string]int{
+		"other": map[string]int{
+			"44444444": 4,
+		},
+		t.Name(): map[string]int{
+			"11111111": 0,
+			"22222222": 0,
+			"33333333": 1,
+			"44444444": 2,
+		},
+	}
+
+	state := internal.State{Commits: testingCommits}
+
+	state.UpdatePRSetState(config)
+
+	require.Equal(t, expectedStateMap, config.State.RepoToCommitIdToPRSet)
+
+}
+
 func TestHeadFirst(t *testing.T) {
 	t.Run("preserves HEAD first", func(t *testing.T) {
 		res := bl.HeadFirst([]*object.Commit{

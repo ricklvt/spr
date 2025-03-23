@@ -547,6 +547,21 @@ func GenerateCommits(commits []*object.Commit) []*PRCommit {
 	return gitCommits
 }
 
+// UpdatePRSetState updates the RepoToCommitIdToPRSet in the config based upon the state.Commits
+func (s *State) UpdatePRSetState(config *config.Config) {
+	// It is simpler to just build up a new map for this repo than to mutate the existing map
+	prSetMap := map[string]int{}
+
+	for _, commit := range s.Commits {
+		if commit.PRIndex == nil {
+			continue
+		}
+		prSetMap[commit.CommitID] = *commit.PRIndex
+
+	}
+	config.State.RepoToCommitIdToPRSet[config.Repo.GitHubRepoName] = prSetMap
+}
+
 func HeadFirst(commits []*object.Commit) []*object.Commit {
 	if len(commits) < 2 {
 		return commits

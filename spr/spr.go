@@ -503,6 +503,9 @@ func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
 	sd.profiletimer.Step("UpdatePRSets::Update/CreatePRSets")
 
 	// Update persistent PR set state
+	state.UpdatePRSetState(sd.config)
+	sd.profiletimer.Step("UpdatePRSets::UpdatePRSetState")
+
 	// Display status
 }
 
