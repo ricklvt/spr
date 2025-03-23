@@ -2,6 +2,7 @@ package realgit
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -14,6 +15,7 @@ import (
 func NewGitCmd(cfg *config.Config) *gitcmd {
 	initcmd := &gitcmd{
 		config: cfg,
+		stderr: os.Stderr,
 	}
 	var rootdir string
 	err := initcmd.Git("rev-parse --show-toplevel", &rootdir)
@@ -26,6 +28,7 @@ func NewGitCmd(cfg *config.Config) *gitcmd {
 	return &gitcmd{
 		config:  cfg,
 		rootdir: rootdir,
+		stderr:  os.Stderr,
 	}
 }
 
@@ -46,6 +49,7 @@ func maybeAdjustPathPerPlatform(rawRootDir string) string {
 type gitcmd struct {
 	config  *config.Config
 	rootdir string
+	stderr  io.Writer
 }
 
 func (c *gitcmd) Git(argStr string, output *string) error {
@@ -94,13 +98,13 @@ func (c *gitcmd) GitWithEditor(argStr string, output *string, editorCmd string) 
 		out, err := cmd.CombinedOutput()
 		*output = strings.TrimSpace(string(out))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "git error: %s", string(out))
+			fmt.Fprintf(c.stderr, "git error: %s", string(out))
 			return err
 		}
 	} else {
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "git error: %s", string(out))
+			fmt.Fprintf(c.stderr, "git error: %s", string(out))
 			return err
 		}
 	}
@@ -109,4 +113,12 @@ func (c *gitcmd) GitWithEditor(argStr string, output *string, editorCmd string) 
 
 func (c *gitcmd) RootDir() string {
 	return c.rootdir
+}
+
+func (c *gitcmd) SetRootDir(newroot string) {
+	c.rootdir = newroot
+}
+
+func (c *gitcmd) SetStderr(stderr io.Writer) {
+	c.stderr = stderr
 }

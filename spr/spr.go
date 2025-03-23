@@ -446,6 +446,24 @@ func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
 	sd.profiletimer.Step("UpdatePRSets::Fetch")
 
 	// Update all branches of the mutated PR sets
+	for prSet := range state.MutatedPRSets.Iter() {
+		commits := state.CommitsByPRSet(prSet)
+		// Destination branch starts with the "main" branch.
+		destBranchName := sd.config.Repo.GitHubBranch
+
+		// The first cid is the top (committed last) we need to create the branch for the last one first as that is what
+		// will be merged into the main branch first then build on that one for the subsequent commits.
+		for c := len(commits) - 1; c >= 0; c-- {
+			branchName := git.BranchNameFromCommitId(sd.config, commits[c].CommitID)
+
+			err := gitapi.CreateRemoteBranchWithCherryPick(ctx, branchName, destBranchName, commits[c].CommitHash)
+			check(err)
+
+			destBranchName = branchName
+		}
+	}
+	sd.profiletimer.Step("UpdatePRSets::UpdateAllBranches")
+
 	// Update persistent PR set state
 	// Display status
 }

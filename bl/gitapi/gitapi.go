@@ -3,10 +3,12 @@ package gitapi
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/ejoffe/spr/config"
 	"github.com/ejoffe/spr/git"
@@ -32,6 +34,12 @@ func New(config *config.Config, repo *ngit.Repository, goghclient *gogithub.Clie
 // OriginMainRef returns the ref for the default remote and the default branch (often origin/main)
 func (gapi GitApi) OriginMainRef(ctx context.Context) (*plumbing.Reference, error) {
 	branch := gapi.config.Repo.GitHubBranch
+
+	return gapi.OriginBranchRef(ctx, branch)
+}
+
+// OriginBranchRef returns the ref for the default remote (often origin) and the given branch
+func (gapi GitApi) OriginBranchRef(ctx context.Context, branch string) (*plumbing.Reference, error) {
 	remote := gapi.config.Repo.GitHubRemote
 
 	originMainRef, err := gapi.repo.Reference(plumbing.ReferenceName(fmt.Sprintf("refs/remotes/%s/%s", remote, branch)), true)
@@ -81,6 +89,87 @@ func (gapi GitApi) DeleteRemoteBranch(ctx context.Context, branch string) error 
 	return nil
 }
 
+// CreateRemoteBranchWithCherryPick creates the remote branch `branchname` on `destBranchRef` and cherry-picks the sha
+// on it. Returns a reference to the new branch.
+func (gapi GitApi) CreateRemoteBranchWithCherryPick(ctx context.Context, branchName string, destBranchName string, sha string) error {
+	// The "github.com/go-git/go-git/" doesn't support cherry picks so we
+	//have to do this by shelling out to the command line
+	gitshell := realgit.NewGitCmd(gapi.config)
+
+	destBranchRef, err := gapi.OriginBranchRef(ctx, destBranchName)
+	if err != nil {
+		return fmt.Errorf("getting the ref for %s %w", destBranchName, err)
+	}
+
+	// cleanup code
+	cleanup := struct {
+		dir      string
+		worktree string
+		branch   string
+	}{}
+	defer func() {
+		if cleanup.worktree != "" {
+			gitshell.Git(fmt.Sprintf("worktree remove --force %s", cleanup.worktree), nil)
+			gitshell.Git(fmt.Sprintf("worktree prune"), nil)
+		}
+
+		if cleanup.branch != "" {
+			gitshell.Git(fmt.Sprintf("branch -D %s", branchName), nil)
+		}
+
+		if cleanup.dir != "" {
+			os.RemoveAll(cleanup.dir)
+		}
+	}()
+
+	// Create a temp dir for a new worktree
+	tempDir, err := os.MkdirTemp("", strings.ReplaceAll(branchName, "/", "-"))
+	if err != nil {
+		return fmt.Errorf("creating the temp dir %w", err)
+	}
+	cleanup.dir = tempDir
+
+	// Create the worktree
+	err = gitshell.Git(fmt.Sprintf("worktree add %s %s", tempDir, destBranchRef.Hash().String()), nil)
+	if err != nil {
+		return fmt.Errorf("creating the worktree in %s %w", tempDir, err)
+	}
+	cleanup.worktree = tempDir
+
+	// Create a shell for the new worktree
+	gitworktreeshell := realgit.NewGitCmd(gapi.config)
+	gitworktreeshell.SetRootDir(tempDir)
+
+	// Create the local branch if it doesn't already exist
+	if branchExists, _ := gapi.BranchExists(branchName); !branchExists {
+		err = gitworktreeshell.Git(fmt.Sprintf("checkout -b %s %s", branchName, destBranchRef.Hash().String()), nil)
+		if err != nil {
+			return fmt.Errorf("creating the branch %s in worktree %s %w", branchName, tempDir, err)
+		}
+	}
+	cleanup.branch = branchName
+
+	// Cherry pick commit over to this branch.
+	// Output a meaningful error message if we can't apply the cherry-pick
+	output := ""
+	gitworktreeshell.SetStderr(io.Discard)
+	err = gitworktreeshell.Git(fmt.Sprintf("cherry-pick %s", sha), &output)
+	if err != nil {
+		if strings.Contains(output, "Merge conflict in") {
+			return fmt.Errorf("Unable to add %s to the PR set as an earlier commit is required for it to merge properly.\n", sha)
+		}
+		return fmt.Errorf("cherry picking %s into %s in worktree %s %w", sha, branchName, tempDir, err)
+	}
+
+	// Push the branch up to the remote
+	err = gitworktreeshell.Git(fmt.Sprintf("push --force %s %s:%s", gapi.config.Repo.GitHubRemote, branchName, branchName), nil)
+	if err != nil {
+		return fmt.Errorf("pushing %s to %s %w", branchName, gapi.config.Repo.GitHubRemote, err)
+	}
+
+	return nil
+}
+
 func (gapi GitApi) AppendCommitId() error {
 	// The "github.com/go-git/go-git/" doesn't (easily) support updating a commit message so we have to do this by
 	// shelling out to the command line
@@ -102,6 +191,27 @@ func (gapi GitApi) AppendCommitId() error {
 
 	return nil
 }
+
+func (gapi GitApi) BranchExists(branchName string) (bool, error) {
+	iter, err := gapi.repo.Branches()
+	if err != nil {
+		return false, fmt.Errorf("finding existing branches %w", err)
+	}
+	defer iter.Close()
+
+	branchExists := false
+	err = iter.ForEach(func(ref *plumbing.Reference) error {
+		if ref.Name().String() == fmt.Sprintf("refs/heads/%s", branchName) {
+			branchExists = true
+		}
+		if ref.Name().String() == branchName {
+			branchExists = true
+		}
+		return nil
+	})
+	return branchExists, nil
+}
+
 func (gapi GitApi) UpdatePullRequest(
 	ctx context.Context,
 	pullRequests []*github.PullRequest,
