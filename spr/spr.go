@@ -17,6 +17,7 @@ import (
 	"github.com/ejoffe/profiletimer"
 	"github.com/ejoffe/rake"
 	"github.com/ejoffe/spr/bl"
+	"github.com/ejoffe/spr/bl/gitapi"
 	"github.com/ejoffe/spr/config"
 	"github.com/ejoffe/spr/config/config_parser"
 	"github.com/ejoffe/spr/git"
@@ -369,7 +370,13 @@ func (sd *stackediff) MergePullRequests(ctx context.Context, count *uint) {
 //     with an arrow pointing to where you are.
 //   - If a new PR set overlaps with an existing one. The overlapped commits are pulled into the new PR set.
 func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
+	sd.profiletimer.Step("UpdatePRSets::Start")
+	gitapi := gitapi.New(sd.config, sd.repo, sd.goghclient)
+
 	// Add the commit-id to any commits that don't have it yet.
+	gitapi.AppendCommitId()
+	sd.profiletimer.Step("UpdatePRSets::AppndCommitId")
+
 	// Fetch/Prune from github remote
 	// Compute the indices that will be included in the updated PR
 
