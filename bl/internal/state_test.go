@@ -249,6 +249,135 @@ func TestApplyIndicies(t *testing.T) {
 	}
 }
 
+func TestCommitsByPRSet(t *testing.T) {
+	// Define the PRs here so the pointer value will be consistent between calls of testingState
+	// this allow us to compare sets containing &github.PullRequest
+	pr0 := &github.PullRequest{ID: "0"}
+	pr1 := &github.PullRequest{ID: "1"}
+	pr2 := &github.PullRequest{ID: "2"}
+	testingState := internal.State{
+		Commits: []*internal.PRCommit{
+			{
+				Index:       0,
+				PRIndex:     gogithub.Ptr(0),
+				PullRequest: pr0,
+			},
+			{
+				Index:       1,
+				PRIndex:     gogithub.Ptr(1),
+				PullRequest: pr1,
+			},
+			{
+				Index:       2,
+				PRIndex:     gogithub.Ptr(2),
+				PullRequest: pr2,
+			},
+			{
+				Index:       3,
+				PRIndex:     gogithub.Ptr(0),
+				PullRequest: pr0,
+			},
+			{
+				Index: 4,
+			},
+		},
+	}
+
+	commitsByPRSet := testingState.CommitsByPRSet(0)
+	require.Len(t, commitsByPRSet, 2)
+	require.Equal(t, 0, commitsByPRSet[0].Index)
+	require.Equal(t, 3, commitsByPRSet[1].Index)
+}
+
+func TestMutatedPRSetsWithOutOfOrderCommits(t *testing.T) {
+	// A PR set which is in order is one where the Nth To branch matches the N+1 From branch
+	testingState := internal.State{
+		Commits: []*internal.PRCommit{
+			// Start PR set 1
+			{
+				PullRequest: &github.PullRequest{
+					ToBranch: "0",
+				},
+				PRIndex: gogithub.Ptr(0),
+			},
+			{
+				PullRequest: &github.PullRequest{
+					FromBranch: "0",
+					ToBranch:   "1",
+				},
+				PRIndex: gogithub.Ptr(0),
+			},
+			{
+				// Just a commit without a PR
+			},
+			// Start PR set 1 which is out of order
+			{
+				PullRequest: &github.PullRequest{
+					ToBranch: "0",
+				},
+				PRIndex: gogithub.Ptr(1),
+			},
+			{
+				PullRequest: &github.PullRequest{
+					FromBranch: "1",
+				},
+				PRIndex: gogithub.Ptr(1),
+			},
+			// Resume PR set 0
+			{
+				PullRequest: &github.PullRequest{
+					FromBranch: "1",
+					ToBranch:   "2",
+				},
+				PRIndex: gogithub.Ptr(0),
+			},
+		},
+	}
+
+	testingState.MutatedPRSets = mapset.NewSet[int](0)
+	require.True(t, testingState.MutatedPRSetsWithOutOfOrderCommits().IsEmpty())
+	testingState.MutatedPRSets = mapset.NewSet[int](1)
+	require.True(t, testingState.MutatedPRSetsWithOutOfOrderCommits().Contains(1))
+}
+
+func TestPullRequests(t *testing.T) {
+	pr0 := &github.PullRequest{ID: "0"}
+	pr1 := &github.PullRequest{ID: "1"}
+	pr2 := &github.PullRequest{ID: "2"}
+	pr3 := &github.PullRequest{ID: "3"}
+	testingCommits := []*internal.PRCommit{
+		{
+			Index:       0,
+			PRIndex:     gogithub.Ptr(0),
+			PullRequest: pr0,
+		},
+		{
+			Index:       1,
+			PRIndex:     gogithub.Ptr(0),
+			PullRequest: pr1,
+		},
+		{
+			Index:       2,
+			PRIndex:     gogithub.Ptr(1),
+			PullRequest: pr2,
+		},
+		{
+			Index:       3,
+			PRIndex:     gogithub.Ptr(2),
+			PullRequest: pr3,
+		},
+		{
+			Index: 4,
+		},
+	}
+
+	expectedPullRequests := []*github.PullRequest{
+		pr0, pr1, pr2, pr3,
+	}
+	pullRequests := internal.PullRequests(testingCommits)
+	require.Equal(t, expectedPullRequests, pullRequests)
+}
+
 func TestGeneratePullRequestMap(t *testing.T) {
 	t.Run("handles no PRs", func(t *testing.T) {
 		prMap := bl.GeneratePullRequestMap([]bl.PullRequestStatus{})

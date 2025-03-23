@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -401,7 +402,6 @@ func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
 	// Sets the indices.DestinationPRIndex if a new destination PRIndex is created
 	state.ApplyIndices(&indices)
 	sd.profiletimer.Step("UpdatePRSets::ApplyIndices")
-	_ = awaitFetch
 
 	// Delete orphaned PRs (along with the associated branches)
 	_, err = concurrent.SliceMap(state.OrphanedPRs.ToSlice(), func(pr *github.PullRequest) (struct{}, error) {
@@ -416,6 +416,31 @@ func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
 	sd.profiletimer.Step("UpdatePRSets::DeleteOrphanedPRs")
 
 	// Handle reordered commits.
+	// There are two challenges when commits are reordered.
+	// One is that we try and update the branches first and during that process we create a situation where the
+	// target branch already has the source so the PR gets automatically closed.
+	// The second is that we update the to/from branches within the PR but we end up with a situation where the dest branch has all (or more) commits from the
+	// source. Which gets rejected by github.
+	// The solution is to overwrite all branches so they merge to main from whatever. Then push the branches, the re-update
+	// the PRs
+	for prSet := range state.MutatedPRSetsWithOutOfOrderCommits().Iter() {
+		commits := state.CommitsByPRSet(prSet)
+		// We want the oldest first so we create PRs for it first
+		slices.Reverse(commits)
+		pullRequests := bl.PullRequests(commits)
+		_, err = concurrent.SliceMapWithIndex(commits, func(cindex int, ci *bl.PRCommit) (struct{}, error) {
+			// Don't need to rework if no PR exists
+			if ci.PullRequest == nil {
+				return struct{}{}, err
+			}
+
+			err := gitapi.UpdatePullRequestToMain(ctx, pullRequests, ci.PullRequest, ci.Commit)
+			return struct{}{}, err
+		})
+	}
+	sd.profiletimer.Step("UpdatePRSets::HandleRedorderdCommits")
+	_ = awaitFetch
+
 	// Wait for the fetch/prune to complete
 	// Update all branches of the mutated PR sets
 	// Update persistent PR set state

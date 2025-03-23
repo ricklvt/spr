@@ -580,7 +580,7 @@ It even includes some **markdown** formatting.
 	}
 
 	for _, tc := range tests {
-		body := formatBody(tc.commit, tc.stack, false)
+		body := FormatBody(tc.commit, tc.stack, false)
 		if body != tc.description {
 			t.Fatalf("expected: '%v', actual: '%v'", tc.description, body)
 		}
@@ -637,7 +637,7 @@ It even includes some **markdown** formatting.
 	}
 
 	for _, tc := range tests {
-		body := formatBody(tc.commit, tc.stack, true)
+		body := FormatBody(tc.commit, tc.stack, true)
 		if body != tc.description {
 			t.Fatalf("expected: '%v', actual: '%v'", tc.description, body)
 		}
@@ -721,7 +721,7 @@ updated description
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, _ := insertBodyIntoPRTemplate(tt.body, tt.pullRequestTemplate, tt.repo, tt.pr)
+			body, _ := InsertBodyIntoPRTemplate(tt.body, tt.pullRequestTemplate, tt.repo, tt.pr)
 			if body != tt.expected {
 				t.Fatalf("expected: '%v', actual: '%v'", tt.expected, body)
 			}
@@ -818,7 +818,7 @@ func TestInsertBodyIntoPRTemplateErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := insertBodyIntoPRTemplate(tt.body, tt.pullRequestTemplate, tt.repo, tt.pr)
+			_, err := InsertBodyIntoPRTemplate(tt.body, tt.pullRequestTemplate, tt.repo, tt.pr)
 			if !strings.Contains(err.Error(), tt.expected) {
 				t.Fatalf("expected: '%v', actual: '%v'", tt.expected, err.Error())
 			}

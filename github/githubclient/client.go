@@ -287,13 +287,13 @@ func (c *client) CreatePullRequest(ctx context.Context, gitcmd git.GitInterface,
 		Str("FromBranch", headRefName).Str("ToBranch", baseRefName).
 		Msg("CreatePullRequest")
 
-	body := formatBody(commit, info.PullRequests, c.config.Repo.ShowPrTitlesInStack)
+	body := FormatBody(commit, info.PullRequests, c.config.Repo.ShowPrTitlesInStack)
 	if c.config.Repo.PRTemplatePath != "" {
 		pullRequestTemplate, err := readPRTemplate(gitcmd, c.config.Repo.PRTemplatePath)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to read PR template")
 		}
-		body, err = insertBodyIntoPRTemplate(body, pullRequestTemplate, c.config.Repo, nil)
+		body, err = InsertBodyIntoPRTemplate(body, pullRequestTemplate, c.config.Repo, nil)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to insert body into PR template")
 		}
@@ -353,7 +353,7 @@ func formatStackMarkdown(commit git.Commit, stack []*github.PullRequest, showPrT
 	return buf.String()
 }
 
-func formatBody(commit git.Commit, stack []*github.PullRequest, showPrTitlesInStack bool) string {
+func FormatBody(commit git.Commit, stack []*github.PullRequest, showPrTitlesInStack bool) string {
 	if len(stack) <= 1 {
 		return strings.TrimSpace(commit.Body)
 	}
@@ -379,14 +379,14 @@ func readPRTemplate(gitcmd git.GitInterface, templatePath string) (string, error
 	return string(pullRequestTemplateBytes), nil
 }
 
-// insertBodyIntoPRTemplate inserts a text body into the given PR template and returns the result as a string.
+// InsertBodyIntoPRTemplate inserts a text body into the given PR template and returns the result as a string.
 // It uses the PRTemplateInsertStart and PRTemplateInsertEnd values defined in RepoConfig to determine where the body
 // should be inserted in the PR template. If there are issues finding the correct place to insert the body
 // an error will be returned.
 //
 // NOTE: on PR update, rather than using the PR template, it will use the existing PR body, which should have
 // the PR template from the initial PR create.
-func insertBodyIntoPRTemplate(body, prTemplate string, repo *config.RepoConfig, pr *github.PullRequest) (string, error) {
+func InsertBodyIntoPRTemplate(body, prTemplate string, repo *config.RepoConfig, pr *github.PullRequest) (string, error) {
 	templateOrExistingPRBody := prTemplate
 	if pr != nil && pr.Body != "" {
 		templateOrExistingPRBody = pr.Body
@@ -451,13 +451,13 @@ func (c *client) UpdatePullRequest(ctx context.Context, gitcmd git.GitInterface,
 		Str("FromBranch", pr.FromBranch).Str("ToBranch", baseRefName).
 		Interface("PR", pr).Msg("UpdatePullRequest")
 
-	body := formatBody(commit, pullRequests, c.config.Repo.ShowPrTitlesInStack)
+	body := FormatBody(commit, pullRequests, c.config.Repo.ShowPrTitlesInStack)
 	if c.config.Repo.PRTemplatePath != "" {
 		pullRequestTemplate, err := readPRTemplate(gitcmd, c.config.Repo.PRTemplatePath)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to read PR template")
 		}
-		body, err = insertBodyIntoPRTemplate(body, pullRequestTemplate, c.config.Repo, pr)
+		body, err = InsertBodyIntoPRTemplate(body, pullRequestTemplate, c.config.Repo, pr)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to insert body into PR template")
 		}

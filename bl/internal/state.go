@@ -378,6 +378,68 @@ func (s *State) ApplyIndices(indices *Indices) {
 	s.MutatedPRSets = s.MutatedPRSets.Intersect(existingPRSets)
 }
 
+// CommitsByPRSet returns all of the commits for the given PR set with the newest commits first.
+// Note that the Parent, Child, Index fields are not changed in the returned PRCommits
+func (s *State) CommitsByPRSet(prIndex int) []*PRCommit {
+	var commits []*PRCommit
+	for _, ci := range s.Commits {
+		if ci.PRIndex == nil {
+			continue
+		}
+
+		if *ci.PRIndex == prIndex {
+			commits = append(commits, ci)
+		}
+	}
+
+	return commits
+}
+
+// MutatedPRSetsWithOutOfOrderCommits returns the PRSets where the commits are out of order and the PRs need to be rebuilt.
+func (s *State) MutatedPRSetsWithOutOfOrderCommits() mapset.Set[int] {
+	outOfOrderPRSets := mapset.NewSet[int]()
+	for prSet := range s.MutatedPRSets.Iter() {
+		lastTo := ""
+
+		for _, commit := range s.Commits {
+			// If the commit doesn't have a PR then we can ignore it.
+			if commit.PullRequest == nil {
+				continue
+			}
+			// Same as above.
+			if commit.PRIndex == nil {
+				continue
+			}
+			// If the commit is a part of a different PR set then ignore it.
+			if *commit.PRIndex != prSet {
+				continue
+			}
+
+			if lastTo == "" {
+				lastTo = commit.PullRequest.ToBranch
+				continue
+			}
+			if commit.PullRequest.FromBranch != lastTo {
+				outOfOrderPRSets.Add(prSet)
+				break
+			}
+			lastTo = commit.PullRequest.ToBranch
+		}
+	}
+	return outOfOrderPRSets
+}
+
+// PullRequest gets all pull request from the PRCommits.
+func PullRequests(commits []*PRCommit) []*github.PullRequest {
+	pullRequests := make([]*github.PullRequest, 0, len(commits))
+	for _, ci := range commits {
+		if ci.PullRequest != nil {
+			pullRequests = append(pullRequests, ci.PullRequest)
+		}
+	}
+	return pullRequests
+}
+
 func GeneratePullRequestMap(prss []PullRequestStatus) map[string]*github.PullRequest {
 	if prss == nil {
 		return nil

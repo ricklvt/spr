@@ -3,11 +3,16 @@ package gitapi
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path"
+	"strconv"
 
 	"github.com/ejoffe/spr/config"
+	"github.com/ejoffe/spr/git"
 	"github.com/ejoffe/spr/git/realgit"
 	"github.com/ejoffe/spr/github"
+	"github.com/ejoffe/spr/github/githubclient"
 	ngit "github.com/go-git/go-git/v5"
 	ngitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -96,4 +101,107 @@ func (gapi GitApi) AppendCommitId() error {
 	}
 
 	return nil
+}
+func (gapi GitApi) UpdatePullRequest(
+	ctx context.Context,
+	pullRequests []*github.PullRequest,
+	pr *github.PullRequest,
+	commit git.Commit,
+	prevCommit *git.Commit,
+	updateToMain bool,
+) error {
+
+// UpdatePullRequestToMain - updates an existing PR to merge into main/master
+// pullRequests is used to create links to related pull requests
+func (gapi GitApi) UpdatePullRequestToMain(
+	ctx context.Context,
+	pullRequests []*github.PullRequest,
+	pr *github.PullRequest,
+	commit git.Commit,
+) error {
+	return gapi.updatePullRequest(ctx, pullRequests, pr, commit, nil)
+}
+
+// updatePullRequest - updates an existing PR.
+// pullRequests is used to create links to related pull requests
+// prevCommit is used to compute the destination branch name. If it is nil main/master will be used
+func (gapi GitApi) updatePullRequest(
+	ctx context.Context,
+	pullRequests []*github.PullRequest,
+	pr *github.PullRequest,
+	commit git.Commit,
+	prevCommit *git.Commit,
+) error {
+
+	// Note if prevCommit is nil then gapi.config.Repo.GitHubBranch is used
+	headRefName, baseRefName := gapi.getBranches(commit, prevCommit)
+
+	body, err := gapi.getBody(commit, pullRequests)
+	if err != nil {
+		return fmt.Errorf("getting body %w", err)
+	}
+
+	id, err := strconv.ParseInt(pr.ID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("converting ID %s to integer %w", pr.ID, err)
+	}
+	title := &commit.Subject
+	owner := gapi.config.Repo.GitHubRepoOwner
+	repoName := gapi.config.Repo.GitHubRepoName
+
+	head := gogithub.PullRequestBranch{
+		Ref: gogithub.Ptr(headRefName),
+	}
+	base := gogithub.PullRequestBranch{
+		Ref: gogithub.Ptr(baseRefName),
+	}
+	_, _, err = gapi.goghclient.PullRequests.Edit(ctx, owner, repoName, pr.Number, &gogithub.PullRequest{
+		ID:    &id,
+		Title: title,
+		Body:  &body,
+		Draft: &gapi.config.User.CreateDraftPRs,
+		Head:  &head,
+		Base:  &base,
+	})
+	if err != nil {
+		return fmt.Errorf("updating PR for commit %s: %w", commit.CommitHash, err)
+	}
+
+	return nil
+}
+
+// getBranches returns the head and base branch ref names
+func (gapi GitApi) getBranches(commit git.Commit, prevCommit *git.Commit) (string, string) {
+	baseRefName := gapi.config.Repo.GitHubBranch
+	if prevCommit != nil {
+		baseRefName = git.BranchNameFromCommit(gapi.config, *prevCommit)
+	}
+	headRefName := git.BranchNameFromCommit(gapi.config, commit)
+
+	return headRefName, baseRefName
+}
+
+func (gapi GitApi) getBody(commit git.Commit, pullRequests []*github.PullRequest) (string, error) {
+	body := githubclient.FormatBody(commit, pullRequests, gapi.config.Repo.ShowPrTitlesInStack)
+	if gapi.config.Repo.PRTemplatePath == "" {
+		return body, nil
+	}
+
+	w, err := gapi.repo.Worktree()
+	if err != nil {
+		return "", fmt.Errorf("getting worktree %w", err)
+	}
+	fullTemplatePath := path.Join(w.Filesystem.Root(), gapi.config.Repo.PRTemplatePath)
+	pullRequestTemplateBytes, err := os.ReadFile(fullTemplatePath)
+	if err != nil {
+		return "", fmt.Errorf("reading template file %s: %w", fullTemplatePath, err)
+	}
+	pullRequestTemplate := string(pullRequestTemplateBytes)
+
+	body, err = githubclient.InsertBodyIntoPRTemplate(body, pullRequestTemplate, gapi.config.Repo, nil)
+	if err != nil {
+		return "", fmt.Errorf("inserting body into PR template %s: %w", fullTemplatePath, err)
+	}
+
+	return body, nil
 }
