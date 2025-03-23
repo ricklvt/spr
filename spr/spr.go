@@ -396,11 +396,13 @@ func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
 	indices, err := selector.Evaluate(state.Commits, sel)
 	check(err)
 	sd.profiletimer.Step("UpdatePRSets::Evaluate")
-	_ = awaitFetch
-	_ = indices
 
 	// Update the commits PRIndex and tracked orphaned and mutated PR sets.
 	// Sets the indices.DestinationPRIndex if a new destination PRIndex is created
+	state.ApplyIndices(&indices)
+	sd.profiletimer.Step("UpdatePRSets::ApplyIndices")
+	_ = awaitFetch
+
 	// Delete orphaned PRs (along with the associated branches)
 	// Handle reordered commits.
 	// Wait for the fetch/prune to complete
