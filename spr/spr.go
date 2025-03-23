@@ -404,6 +404,17 @@ func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
 	_ = awaitFetch
 
 	// Delete orphaned PRs (along with the associated branches)
+	_, err = concurrent.SliceMap(state.OrphanedPRs.ToSlice(), func(pr *github.PullRequest) (struct{}, error) {
+		if pr == nil {
+			return struct{}{}, nil
+		}
+		err := gitapi.DeletePullRequest(ctx, pr)
+		return struct{}{}, err
+	})
+	check(err)
+	state.OrphanedPRs.Clear()
+	sd.profiletimer.Step("UpdatePRSets::DeleteOrphanedPRs")
+
 	// Handle reordered commits.
 	// Wait for the fetch/prune to complete
 	// Update all branches of the mutated PR sets
