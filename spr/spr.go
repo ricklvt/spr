@@ -363,6 +363,26 @@ func (sd *stackediff) MergePullRequests(ctx context.Context, count *uint) {
 	sd.profiletimer.Step("MergePullRequests::End")
 }
 
+// UpdatePRSets updatest the PR Sets given the selection.
+//   - The PRs are created in order so the oldest commit in the PR Set is created first.
+//   - If there are more than one PR in a PR set an index is included in the PR message showing the other PRs in the PR set
+//     with an arrow pointing to where you are.
+//   - If a new PR set overlaps with an existing one. The overlapped commits are pulled into the new PR set.
+func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
+	// Add the commit-id to any commits that don't have it yet.
+	// Fetch/Prune from github remote
+	// Compute the indices that will be included in the updated PR
+
+	// Update the commits PRIndex and tracked orphaned and mutated PR sets.
+	// Sets the indices.DestinationPRIndex if a new destination PRIndex is created
+	// Delete orphaned PRs (along with the associated branches)
+	// Handle reordered commits.
+	// Wait for the fetch/prune to complete
+	// Update all branches of the mutated PR sets
+	// Update persistent PR set state
+	// Display status
+}
+
 // StatusCommitsAndPRSets outputs the status of all commits and PR sets.
 // If a PR set is stored in state but no PR exists (like it was manually deleted from the github UI) then it will be
 // removed from state.

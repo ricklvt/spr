@@ -169,16 +169,26 @@ VERSION: fork of {{.Version}}
 				Aliases: []string{"u", "up"},
 				Usage:   "Update and create pull requests for updated commits in the stack",
 				Action: func(c *cli.Context) error {
-					if c.Bool("no-rebase") {
-						os.Setenv("SPR_NOREBASE", "true")
-					}
-					if c.IsSet("count") {
-						count := c.Uint("count")
-						stackedpr.UpdatePullRequests(ctx, c.StringSlice("reviewer"), &count)
+					if cfg.User.PRSetWorkflows {
+						if c.Args().Len() != 1 {
+							fmt.Printf("Usage: update <selector>\n")
+							return nil
+						}
+						selector := c.Args().First()
+						stackedpr.UpdatePRSets(ctx, selector)
+						return nil
 					} else {
-						stackedpr.UpdatePullRequests(ctx, c.StringSlice("reviewer"), nil)
+						if c.Bool("no-rebase") {
+							os.Setenv("SPR_NOREBASE", "true")
+						}
+						if c.IsSet("count") {
+							count := c.Uint("count")
+							stackedpr.UpdatePullRequests(ctx, c.StringSlice("reviewer"), &count)
+						} else {
+							stackedpr.UpdatePullRequests(ctx, c.StringSlice("reviewer"), nil)
+						}
+						return nil
 					}
-					return nil
 				},
 				Flags: []cli.Flag{
 					detailFlag,
