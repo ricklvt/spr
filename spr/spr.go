@@ -19,6 +19,7 @@ import (
 	"github.com/ejoffe/spr/bl"
 	"github.com/ejoffe/spr/bl/concurrent"
 	"github.com/ejoffe/spr/bl/gitapi"
+	"github.com/ejoffe/spr/bl/selector"
 	"github.com/ejoffe/spr/config"
 	"github.com/ejoffe/spr/config/config_parser"
 	"github.com/ejoffe/spr/git"
@@ -386,9 +387,17 @@ func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
 			Prune:      true,
 		},
 	)
-	_ = awaitFetch
+
+	state, err := bl.NewReadState(ctx, sd.config, sd.goghclient, sd.repo)
+	check(err)
+	sd.profiletimer.Step("UpdatePRSets::NewReadState")
 
 	// Compute the indices that will be included in the updated PR
+	indices, err := selector.Evaluate(state.Commits, sel)
+	check(err)
+	sd.profiletimer.Step("UpdatePRSets::Evaluate")
+	_ = awaitFetch
+	_ = indices
 
 	// Update the commits PRIndex and tracked orphaned and mutated PR sets.
 	// Sets the indices.DestinationPRIndex if a new destination PRIndex is created
