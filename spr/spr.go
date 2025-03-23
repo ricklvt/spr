@@ -17,6 +17,7 @@ import (
 	"github.com/ejoffe/profiletimer"
 	"github.com/ejoffe/rake"
 	"github.com/ejoffe/spr/bl"
+	"github.com/ejoffe/spr/bl/concurrent"
 	"github.com/ejoffe/spr/bl/gitapi"
 	"github.com/ejoffe/spr/config"
 	"github.com/ejoffe/spr/config/config_parser"
@@ -378,6 +379,15 @@ func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
 	sd.profiletimer.Step("UpdatePRSets::AppndCommitId")
 
 	// Fetch/Prune from github remote
+	awaitFetch := concurrent.Async1Ret1(
+		sd.repo.Fetch,
+		&ngit.FetchOptions{
+			RemoteName: sd.config.Repo.GitHubRemote,
+			Prune:      true,
+		},
+	)
+	_ = awaitFetch
+
 	// Compute the indices that will be included in the updated PR
 
 	// Update the commits PRIndex and tracked orphaned and mutated PR sets.

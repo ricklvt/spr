@@ -7,6 +7,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestAsync1Ret1(t *testing.T) {
+	await := concurrent.Async1Ret1(
+		func(a int) error {
+			return nil
+		},
+		1,
+	)
+
+	err := await.Await()
+
+	require.NoError(t, err)
+}
+
 func TestAsync4Ret3(t *testing.T) {
 	await := concurrent.Async4Ret3(
 		func(a, b, c, d int) (int, int, error) {
