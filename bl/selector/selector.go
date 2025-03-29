@@ -62,7 +62,7 @@ func asRange(r string) (int, int, bool) {
 	return start, end, true
 }
 
-func asPRSet(s string) (int, bool) {
+func AsPRSet(s string) (int, bool) {
 	s = strings.TrimSpace(s)
 
 	if rest, found := strings.CutPrefix(s, "s"); found {
@@ -86,7 +86,7 @@ func asDestination(s string) (int, string, bool) {
 			strings.TrimSpace(parts[1]),
 		}
 
-		if prIndex, ok := asPRSet(parts[0]); ok {
+		if prIndex, ok := AsPRSet(parts[0]); ok {
 			return prIndex, parts[1], true
 		}
 	}
@@ -102,7 +102,7 @@ func asDestination(s string) (int, string, bool) {
 		strings.TrimSpace(parts[1]),
 	}
 
-	if prIndex, ok := asPRSet(parts[0]); ok {
+	if prIndex, ok := AsPRSet(parts[0]); ok {
 		// treat the "s#+..." as "s#:s#,..."
 		return prIndex, parts[0] + "," + parts[1], true
 	}
@@ -142,7 +142,7 @@ func evalateCommitIndexes(commits []*internal.PRCommit, selector string) (mapset
 			}
 			continue
 		}
-		if prIndex, ok := asPRSet(l); ok {
+		if prIndex, ok := AsPRSet(l); ok {
 			validPr := false
 			for _, commit := range commits {
 				if commit.PRIndex != nil && *commit.PRIndex == prIndex {

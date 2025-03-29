@@ -213,13 +213,23 @@ VERSION: fork of {{.Version}}
 				Name:  "merge",
 				Usage: "Merge all mergeable pull requests",
 				Action: func(c *cli.Context) error {
-					if c.IsSet("count") {
-						count := c.Uint("count")
-						stackedpr.MergePullRequests(ctx, &count)
+					if cfg.User.PRSetWorkflows {
+						if c.Args().Len() != 1 {
+							fmt.Printf("Usage: merge <PR set index>\n")
+							return nil
+						}
+						setIndex := c.Args().First()
+						stackedpr.MergePRSet(ctx, setIndex)
+						return nil
 					} else {
-						stackedpr.MergePullRequests(ctx, nil)
+						if c.IsSet("count") {
+							count := c.Uint("count")
+							stackedpr.MergePullRequests(ctx, &count)
+						} else {
+							stackedpr.MergePullRequests(ctx, nil)
+						}
+						return nil
 					}
-					return nil
 				},
 				Flags: []cli.Flag{
 					detailFlag,

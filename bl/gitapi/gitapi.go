@@ -330,6 +330,26 @@ func (gapi GitApi) updatePullRequest(
 	return nil
 }
 
+func (gapi GitApi) MergePullRequest(
+	ctx context.Context,
+	pr *github.PullRequest,
+) error {
+	owner := gapi.config.Repo.GitHubRepoOwner
+	repoName := gapi.config.Repo.GitHubRepoName
+
+	// Get the merge method
+	mergeMethod := gapi.config.Repo.MergeMethod
+
+	_, _, err := gapi.goghclient.PullRequests.Merge(ctx, owner, repoName, pr.Number, "", &gogithub.PullRequestOptions{
+		MergeMethod: string(mergeMethod),
+	})
+	if err != nil {
+		return fmt.Errorf("unable to merge %d %w", pr.Number, err)
+	}
+
+	return nil
+}
+
 // getBranches returns the head and base branch ref names
 func (gapi GitApi) getBranches(commit git.Commit, prevCommit *git.Commit) (string, string) {
 	baseRefName := gapi.config.Repo.GitHubBranch
