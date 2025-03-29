@@ -367,6 +367,86 @@ func (sd *stackediff) MergePullRequests(ctx context.Context, count *uint) {
 	sd.profiletimer.Step("MergePullRequests::End")
 }
 
+// MergePRSet merges the given PR set
+// In order to merge a PRSet without conflicts we find the newest PR and update the PR to merge into main/master.
+// The newest PR branch has all of the commits of the others so this will land all commits into main/master.
+// We then close the other PRs.
+func (sd *stackediff) MergePRSet(ctx context.Context, setIndex string) {
+	sd.profiletimer.Step("MergePRSet::Start")
+	gitapi := gitapi.New(sd.config, sd.repo, sd.goghclient)
+
+	index, ok := selector.AsPRSet(setIndex)
+	if !ok {
+		check(fmt.Errorf("unable to parse PR set index %s", setIndex))
+	}
+	sd.profiletimer.Step("MergePRSet::AsPRSet")
+
+	// Merge the newest commit into main as it has all of the commits.
+	// Close the remaining commits
+	state, err := bl.NewReadState(ctx, sd.config, sd.goghclient, sd.repo)
+	check(err)
+	sd.profiletimer.Step("MergePRSet::NewReadState")
+
+	// MergeCheck
+	if sd.config.Repo.MergeCheck != "" {
+		sd.profiletimer.Step("MergePRSet::MergeCheck")
+		commits := state.CommitsByPRSet(index)
+		if len(commits) > 0 {
+			sd.profiletimer.Step("MergePRSet::GetInfo")
+			githubInfo := sd.github.GetInfo(ctx, sd.gitcmd)
+			sd.profiletimer.Step("MergePRSet::GotInfo")
+			// Get the newest commit
+			lastCommit := state.CommitsByPRSet(index)[0]
+			checkedCommit, found := sd.config.State.MergeCheckCommit[githubInfo.Key()]
+
+			if !found {
+				check(errors.New("need to run merge check 'spr check' before merging"))
+			} else if checkedCommit != "SKIP" && lastCommit.CommitHash != checkedCommit {
+				check(errors.New("need to run merge check 'spr check' before merging"))
+			}
+			sd.profiletimer.Step("MergePRSet::MergeChecked")
+		}
+	}
+
+	commits := state.CommitsByPRSet(index)
+	// We want the oldest PR first so we preserve the PR links when updating it to merge to main/master
+	slices.Reverse(commits)
+	pullRequests := bl.PullRequests(commits)
+	_, err = concurrent.SliceMapWithIndex(commits, func(cindex int, ci *bl.PRCommit) (struct{}, error) {
+		if cindex == len(commits)-1 {
+			err := gitapi.UpdatePullRequestToMain(ctx, pullRequests, ci.PullRequest, ci.Commit)
+			if err != nil {
+				return struct{}{}, fmt.Errorf("update PR to merge to main in preparation to merge PR set %w", err)
+			}
+
+			err = gitapi.MergePullRequest(ctx, ci.PullRequest)
+			if err != nil {
+				return struct{}{}, fmt.Errorf("unable to merge oldest PR in PR set %w", err)
+			}
+
+			err = sd.repo.Fetch(&ngit.FetchOptions{
+				RemoteName: sd.config.Repo.GitHubRemote,
+				Prune:      true,
+			})
+			if err != nil {
+				return struct{}{}, fmt.Errorf("unable to fetch merge changes %w", err)
+			}
+
+			return struct{}{}, nil
+		}
+
+		// Delete/close the other pull requests
+		err := gitapi.DeletePullRequest(ctx, ci.PullRequest)
+		if err != nil {
+			return struct{}{}, fmt.Errorf("unable to close non-oldest PR in PR set %w", err)
+		}
+		return struct{}{}, err
+	})
+	check(err)
+
+	sd.profiletimer.Step("MergePRSet::NewReadState")
+}
+
 // UpdatePRSets updatest the PR Sets given the selection.
 //   - The PRs are created in order so the oldest commit in the PR Set is created first.
 //   - If there are more than one PR in a PR set an index is included in the PR message showing the other PRs in the PR set
