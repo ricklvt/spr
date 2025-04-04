@@ -17,7 +17,7 @@ import (
 )
 
 func makeTestObjects(t *testing.T, synchronized bool) (
-	s *stackediff, gitmock *mockgit.Mock, githubmock *mockclient.MockClient,
+	s *Stackediff, gitmock *mockgit.Mock, githubmock *mockclient.MockClient,
 	input *bytes.Buffer, output *bytes.Buffer) {
 	cfg := config.EmptyConfig()
 	cfg.Repo.RequireChecks = true
@@ -34,7 +34,7 @@ func makeTestObjects(t *testing.T, synchronized bool) (
 	}
 	s = NewStackedPR(cfg, githubmock, gitmock, nil, nil)
 	output = &bytes.Buffer{}
-	s.output = output
+	s.Output = output
 	input = &bytes.Buffer{}
 	s.input = input
 	s.synchronized = synchronized
