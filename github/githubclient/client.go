@@ -483,6 +483,7 @@ func (c *client) UpdatePullRequest(ctx context.Context, gitcmd git.GitInterface,
 		}
 	}
 
+	fmt.Printf("pulling existing PR...\n")
 	if existingPR, err := c.api.PullRequestByRepoAndNumber(
 		ctx, c.config.Repo.GitHubRepoOwner,
 		c.config.Repo.GitHubRepoName,
@@ -513,6 +514,9 @@ func (c *client) UpdatePullRequest(ctx context.Context, gitcmd git.GitInterface,
 	if c.config.User.PreserveTitleAndBody {
 		input.Title = nil
 		input.Body = nil
+	} else if c.config.User.PreserveTitle {
+		log.Info().Str("PR", fmt.Sprintf("%s:%d", c.config.Repo.GitHubRepoName, pr.Number)).Msg("preserving title")
+		input.Title = nil
 	}
 
 	log.Info().Interface("input", input).Msg("UpdatePullRequest input\n")

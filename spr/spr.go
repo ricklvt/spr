@@ -332,6 +332,7 @@ func (sd *Stackediff) MergePullRequests(ctx context.Context, count *uint) {
 	prToMerge := githubInfo.PullRequests[prIndex]
 
 	// Update the base of the merging pr to target branch
+	fmt.Printf("calling UpdatePullRequest()...\n")
 	err := sd.github.UpdatePullRequest(ctx, sd.gitcmd, githubInfo.PullRequests, prToMerge, prToMerge.Commit, nil)
 	check(err)
 	sd.profiletimer.Step("MergePullRequests::update pr base")
