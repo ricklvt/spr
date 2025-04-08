@@ -30,9 +30,9 @@ import (
 )
 
 // NewStackedPR constructs and returns a new stackediff instance.
-func NewStackedPR(config *config.Config, github github.GitHubInterface, gitcmd git.GitInterface, repo *ngit.Repository, goghclient *gogithub.Client) *stackediff {
+func NewStackedPR(config *config.Config, github github.GitHubInterface, gitcmd git.GitInterface, repo *ngit.Repository, goghclient *gogithub.Client) *Stackediff {
 
-	return &stackediff{
+	return &Stackediff{
 		config:       config,
 		github:       github,
 		gitcmd:       gitcmd,
@@ -40,12 +40,12 @@ func NewStackedPR(config *config.Config, github github.GitHubInterface, gitcmd g
 		goghclient:   goghclient,
 		profiletimer: profiletimer.StartNoopTimer(),
 
-		output: os.Stdout,
+		Output: os.Stdout,
 		input:  os.Stdin,
 	}
 }
 
-type stackediff struct {
+type Stackediff struct {
 	config        *config.Config
 	github        github.GitHubInterface
 	gitcmd        git.GitInterface
@@ -54,7 +54,7 @@ type stackediff struct {
 	profiletimer  profiletimer.Timer
 	DetailEnabled bool
 
-	output       io.Writer
+	Output       io.Writer
 	input        io.Reader
 	synchronized bool // When true code is executed without goroutines. Allows test to be deterministic
 }
@@ -62,22 +62,22 @@ type stackediff struct {
 // AmendCommit enables one to easily amend a commit in the middle of a stack
 //
 //	of commits. A list of commits is printed and one can be chosen to be amended.
-func (sd *stackediff) AmendCommit(ctx context.Context) {
+func (sd *Stackediff) AmendCommit(ctx context.Context) {
 	localCommits := git.GetLocalCommitStack(sd.config, sd.gitcmd)
 	if len(localCommits) == 0 {
-		fmt.Fprintf(sd.output, "No commits to amend\n")
+		fmt.Fprintf(sd.Output, "No commits to amend\n")
 		return
 	}
 
 	for i := len(localCommits) - 1; i >= 0; i-- {
 		commit := localCommits[i]
-		fmt.Fprintf(sd.output, " %d : %s : %s\n", i+1, commit.CommitID[0:8], commit.Subject)
+		fmt.Fprintf(sd.Output, " %d : %s : %s\n", i+1, commit.CommitID[0:8], commit.Subject)
 	}
 
 	if len(localCommits) == 1 {
-		fmt.Fprintf(sd.output, "Commit to amend (%d): ", 1)
+		fmt.Fprintf(sd.Output, "Commit to amend (%d): ", 1)
 	} else {
-		fmt.Fprintf(sd.output, "Commit to amend (%d-%d): ", 1, len(localCommits))
+		fmt.Fprintf(sd.Output, "Commit to amend (%d-%d): ", 1, len(localCommits))
 	}
 
 	reader := bufio.NewReader(sd.input)
@@ -85,7 +85,7 @@ func (sd *stackediff) AmendCommit(ctx context.Context) {
 	line = strings.TrimSpace(line)
 	commitIndex, err := strconv.Atoi(line)
 	if err != nil || commitIndex < 1 || commitIndex > len(localCommits) {
-		fmt.Fprint(sd.output, "Invalid input\n")
+		fmt.Fprint(sd.Output, "Invalid input\n")
 		return
 	}
 	commitIndex = commitIndex - 1
@@ -97,7 +97,7 @@ func (sd *stackediff) AmendCommit(ctx context.Context) {
 	sd.gitcmd.MustGit(rebaseCmd, nil)
 }
 
-func (sd *stackediff) addReviewers(ctx context.Context,
+func (sd *Stackediff) addReviewers(ctx context.Context,
 	pr *github.PullRequest, reviewers []string, assignable []github.RepoAssignee) {
 	userIDs := make([]string, 0, len(reviewers))
 	for _, r := range reviewers {
@@ -144,7 +144,7 @@ func alignLocalCommits(commits []git.Commit, prs []*github.PullRequest) []git.Co
 //	 pull request if a commit has been amended.
 //	In the case where commits are reordered, the corresponding pull requests
 //	 will also be reordered to match the commit stack order.
-func (sd *stackediff) UpdatePullRequests(ctx context.Context, reviewers []string, count *uint) {
+func (sd *Stackediff) UpdatePullRequests(ctx context.Context, reviewers []string, count *uint) {
 	sd.profiletimer.Step("UpdatePullRequests::Start")
 	githubInfo := sd.fetchAndGetGitHubInfo(ctx)
 	if githubInfo == nil {
@@ -221,7 +221,7 @@ func (sd *stackediff) UpdatePullRequests(ctx context.Context, reviewers []string
 				updateQueue = append(updateQueue, prUpdate{pr, c, prevCommit})
 				pr.Commit = c
 				if len(reviewers) != 0 {
-					fmt.Fprintf(sd.output, "warning: not updating reviewers for PR #%d\n", pr.Number)
+					fmt.Fprintf(sd.Output, "warning: not updating reviewers for PR #%d\n", pr.Number)
 				}
 				prevCommit = &localCommits[commitIndex]
 				break
@@ -291,7 +291,7 @@ func (sd *stackediff) UpdatePullRequests(ctx context.Context, reviewers []string
 //	pull request. This one merge in effect merges all the commits in the stack.
 //	We than close all the pull requests which are below the merged request, as
 //	their commits have already been merged.
-func (sd *stackediff) MergePullRequests(ctx context.Context, count *uint) {
+func (sd *Stackediff) MergePullRequests(ctx context.Context, count *uint) {
 	sd.profiletimer.Step("MergePullRequests::Start")
 	githubInfo := sd.github.GetInfo(ctx, sd.gitcmd)
 	sd.profiletimer.Step("MergePullRequests::getGitHubInfo")
@@ -361,7 +361,7 @@ func (sd *stackediff) MergePullRequests(ctx context.Context, count *uint) {
 	for i := 0; i <= prIndex; i++ {
 		pr := githubInfo.PullRequests[i]
 		pr.Merged = true
-		fmt.Fprintf(sd.output, "%s\n", pr.String(sd.config))
+		fmt.Fprintf(sd.Output, "%s\n", pr.String(sd.config))
 	}
 
 	sd.profiletimer.Step("MergePullRequests::End")
@@ -371,7 +371,7 @@ func (sd *stackediff) MergePullRequests(ctx context.Context, count *uint) {
 // In order to merge a PRSet without conflicts we find the newest PR and update the PR to merge into main/master.
 // The newest PR branch has all of the commits of the others so this will land all commits into main/master.
 // We then close the other PRs.
-func (sd *stackediff) MergePRSet(ctx context.Context, setIndex string) {
+func (sd *Stackediff) MergePRSet(ctx context.Context, setIndex string) {
 	sd.profiletimer.Step("MergePRSet::Start")
 	gitapi := gitapi.New(sd.config, sd.repo, sd.goghclient)
 
@@ -450,7 +450,7 @@ func (sd *stackediff) MergePRSet(ctx context.Context, setIndex string) {
 //   - If there are more than one PR in a PR set an index is included in the PR message showing the other PRs in the PR set
 //     with an arrow pointing to where you are.
 //   - If a new PR set overlaps with an existing one. The overlapped commits are pulled into the new PR set.
-func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
+func (sd *Stackediff) UpdatePRSets(ctx context.Context, sel string) {
 	sd.profiletimer.Step("UpdatePRSets::Start")
 	gitapi := gitapi.New(sd.config, sd.repo, sd.goghclient)
 
@@ -591,22 +591,22 @@ func (sd *stackediff) UpdatePRSets(ctx context.Context, sel string) {
 // StatusCommitsAndPRSets outputs the status of all commits and PR sets.
 // If a PR set is stored in state but no PR exists (like it was manually deleted from the github UI) then it will be
 // removed from state.
-func (sd *stackediff) StatusCommitsAndPRSets(ctx context.Context) {
+func (sd *Stackediff) StatusCommitsAndPRSets(ctx context.Context) {
 	sd.profiletimer.Step("StatusCommitsAndPRSets::Start")
 	state, err := bl.NewReadState(ctx, sd.config, sd.goghclient, sd.repo)
 	check(err)
 	sd.profiletimer.Step("StatusCommitsAndPRSets::NewReadState")
 
 	if state.Head() == nil {
-		fmt.Fprintf(sd.output, "no local commits\n")
+		fmt.Fprintf(sd.Output, "no local commits\n")
 		return
 	}
 	if sd.DetailEnabled {
-		fmt.Fprint(sd.output, header(sd.config))
+		fmt.Fprint(sd.Output, header(sd.config))
 	}
 	sd.profiletimer.Step("StatusCommitsAndPRSets::PrintDetails")
 	for this := state.Head(); this != nil; this = this.Parent {
-		fmt.Fprintf(sd.output, "%s\n", this.String(sd.config))
+		fmt.Fprintf(sd.Output, "%s\n", this.String(sd.config))
 	}
 	sd.profiletimer.Step("StatusCommitsAndPRSets::OutputStatus")
 }
@@ -615,33 +615,33 @@ func (sd *stackediff) StatusCommitsAndPRSets(ctx context.Context) {
 //
 //	prints out the status of each. It does not make any updates locally or
 //	remotely on github.
-func (sd *stackediff) StatusPullRequests(ctx context.Context) {
+func (sd *Stackediff) StatusPullRequests(ctx context.Context) {
 	sd.profiletimer.Step("StatusPullRequests::Start")
 	githubInfo := sd.github.GetInfo(ctx, sd.gitcmd)
 
 	if len(githubInfo.PullRequests) == 0 {
-		fmt.Fprintf(sd.output, "pull request stack is empty\n")
+		fmt.Fprintf(sd.Output, "pull request stack is empty\n")
 	} else {
 		if sd.DetailEnabled {
-			fmt.Fprint(sd.output, header(sd.config))
+			fmt.Fprint(sd.Output, header(sd.config))
 		}
 		for i := len(githubInfo.PullRequests) - 1; i >= 0; i-- {
 			pr := githubInfo.PullRequests[i]
-			fmt.Fprintf(sd.output, "%s\n", pr.String(sd.config))
+			fmt.Fprintf(sd.Output, "%s\n", pr.String(sd.config))
 		}
 	}
 	sd.profiletimer.Step("StatusPullRequests::End")
 }
 
 // SyncStack synchronizes your local stack with remote's
-func (sd *stackediff) SyncStack(ctx context.Context) {
+func (sd *Stackediff) SyncStack(ctx context.Context) {
 	sd.profiletimer.Step("SyncStack::Start")
 	defer sd.profiletimer.Step("SyncStack::End")
 
 	githubInfo := sd.github.GetInfo(ctx, sd.gitcmd)
 
 	if len(githubInfo.PullRequests) == 0 {
-		fmt.Fprintf(sd.output, "pull request stack is empty\n")
+		fmt.Fprintf(sd.Output, "pull request stack is empty\n")
 		return
 	}
 
@@ -651,7 +651,7 @@ func (sd *stackediff) SyncStack(ctx context.Context) {
 	check(err)
 }
 
-func (sd *stackediff) RunMergeCheck(ctx context.Context) {
+func (sd *Stackediff) RunMergeCheck(ctx context.Context) {
 	sd.profiletimer.Step("RunMergeCheck::Start")
 	defer sd.profiletimer.Step("RunMergeCheck::End")
 
@@ -712,12 +712,12 @@ func (sd *stackediff) RunMergeCheck(ctx context.Context) {
 }
 
 // ProfilingEnable enables stopwatch profiling
-func (sd *stackediff) ProfilingEnable() {
+func (sd *Stackediff) ProfilingEnable() {
 	sd.profiletimer = profiletimer.StartProfileTimer()
 }
 
 // ProfilingSummary prints profiling info to stdout
-func (sd *stackediff) ProfilingSummary() {
+func (sd *Stackediff) ProfilingSummary() {
 	err := sd.profiletimer.ShowResults()
 	check(err)
 }
@@ -746,7 +746,7 @@ func sortPullRequestsByLocalCommitOrder(pullRequests []*github.PullRequest, loca
 	return sortedPullRequests
 }
 
-func (sd *stackediff) fetchAndGetGitHubInfo(ctx context.Context) *github.GitHubInfo {
+func (sd *Stackediff) fetchAndGetGitHubInfo(ctx context.Context) *github.GitHubInfo {
 	if sd.config.Repo.ForceFetchTags {
 		sd.gitcmd.MustGit("fetch --tags --force", nil)
 	} else {
@@ -776,7 +776,7 @@ func (sd *stackediff) fetchAndGetGitHubInfo(ctx context.Context) *github.GitHubI
 //
 //	which are new (on top of remote branch) and creates a corresponding
 //	branch on github for each commit.
-func (sd *stackediff) syncCommitStackToGitHub(ctx context.Context,
+func (sd *Stackediff) syncCommitStackToGitHub(ctx context.Context,
 	commits []git.Commit, info *github.GitHubInfo) bool {
 
 	var output string
