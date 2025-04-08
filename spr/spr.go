@@ -431,11 +431,9 @@ func (sd *Stackediff) MergePRSet(ctx context.Context, setIndex string) {
 			if err != nil {
 				return struct{}{}, fmt.Errorf("unable to fetch merge changes %w", err)
 			}
-
-			return struct{}{}, nil
 		}
 
-		// Delete/close the other pull requests
+		// Delete/close all pull requests
 		err := gitapi.DeletePullRequest(ctx, ci.PullRequest)
 		if err != nil {
 			return struct{}{}, fmt.Errorf("unable to close non-oldest PR in PR set %w", err)
