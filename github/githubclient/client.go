@@ -39,6 +39,9 @@ This configuration file is shared with GitHub's "hub" CLI (https://hub.github.co
 so if you already use that, spr will automatically pick up your token.
 `
 
+const sprBodyStart = "<!-- start spr body -->"
+const sprBodyEnd = "<!-- end spr body -->"
+
 func NewGitHubClient(ctx context.Context, config *config.Config) *client {
 	token := github.FindToken(config.Repo.GitHubHost)
 	if token == "" {
@@ -298,14 +301,16 @@ func (c *client) CreatePullRequest(ctx context.Context, gitcmd git.GitInterface,
 			log.Fatal().Err(err).Msg("failed to insert body into PR template")
 		}
 	}
-	resp, err := c.api.CreatePullRequest(ctx, genclient.CreatePullRequestInput{
+	input := genclient.CreatePullRequestInput{
 		RepositoryId: info.RepositoryID,
 		BaseRefName:  baseRefName,
 		HeadRefName:  headRefName,
 		Title:        commit.Subject,
 		Body:         &body,
 		Draft:        &c.config.User.CreateDraftPRs,
-	})
+	}
+	log.Info().Interface("input", input).Msg("CreatePullRequest input\n")
+	resp, err := c.api.CreatePullRequest(ctx, input)
 	check(err)
 
 	pr := &github.PullRequest{
@@ -354,18 +359,21 @@ func formatStackMarkdown(commit git.Commit, stack []*github.PullRequest, showPrT
 }
 
 func FormatBody(commit git.Commit, stack []*github.PullRequest, showPrTitlesInStack bool) string {
+	var body string
 	if len(stack) <= 1 {
-		return strings.TrimSpace(commit.Body)
-	}
+		body = strings.TrimSpace(commit.Body)
 
-	if commit.Body == "" {
-		return fmt.Sprintf("**Stack**:\n%s",
+	} else if commit.Body == "" {
+		body = fmt.Sprintf("**Stack**:\n%s",
+			addManualMergeNotice(formatStackMarkdown(commit, stack, showPrTitlesInStack)))
+
+	} else {
+		body = fmt.Sprintf("%s\n\n---\n\n**Stack**:\n%s",
+			commit.Body,
 			addManualMergeNotice(formatStackMarkdown(commit, stack, showPrTitlesInStack)))
 	}
 
-	return fmt.Sprintf("%s\n\n---\n\n**Stack**:\n%s",
-		commit.Body,
-		addManualMergeNotice(formatStackMarkdown(commit, stack, showPrTitlesInStack)))
+	return fmt.Sprintf("%s\n\n%s\n\n%s", sprBodyStart, body, sprBodyEnd)
 }
 
 // Reads the specified PR template file and returns it as a string
@@ -436,8 +444,19 @@ func addManualMergeNotice(body string) string {
 		"Do not merge manually using the UI - doing so may have unexpected results.*"
 }
 
-func (c *client) UpdatePullRequest(ctx context.Context, gitcmd git.GitInterface, pullRequests []*github.PullRequest, pr *github.PullRequest, commit git.Commit, prevCommit *git.Commit) {
+func InsertSPRBodyIntoUserEditedPRText(sprBody, prBody string) string {
+	prefix, postfix := "", ""
+	if strings.Contains(prBody, sprBodyStart) {
+		prefix = strings.Split(prBody, sprBodyStart)[0]
+	}
+	onEnd := strings.Split(prBody, sprBodyEnd)
+	if len(onEnd) > 1 {
+		postfix = onEnd[1]
+	}
+	return fmt.Sprintf("%s%s%s", prefix, sprBody, postfix)
+}
 
+func (c *client) UpdatePullRequest(ctx context.Context, gitcmd git.GitInterface, pullRequests []*github.PullRequest, pr *github.PullRequest, commit git.Commit, prevCommit *git.Commit) {
 	if c.config.User.LogGitHubCalls {
 		fmt.Printf("> github update %d : %s\n", pr.Number, pr.Title)
 	}
@@ -462,6 +481,20 @@ func (c *client) UpdatePullRequest(ctx context.Context, gitcmd git.GitInterface,
 			log.Fatal().Err(err).Msg("failed to insert body into PR template")
 		}
 	}
+
+	if existingPR, err := c.api.PullRequestByRepoAndNumber(
+		ctx, c.config.Repo.GitHubRepoOwner,
+		c.config.Repo.GitHubRepoName,
+		pr.Number,
+	); err != nil {
+		log.Warn().Err(err).Msg("failed to get existing PR body")
+	} else {
+		log.Info().
+			Str("PR", fmt.Sprintf("%s:%d", c.config.Repo.GitHubRepoName, pr.Number)).
+			Str("body", existingPR.Repository.PullRequest.Body).
+			Msg("existing PR")
+		body = InsertSPRBodyIntoUserEditedPRText(body, existingPR.Repository.PullRequest.Body)
+	}
 	title := &commit.Subject
 
 	input := genclient.UpdatePullRequestInput{
@@ -479,6 +512,7 @@ func (c *client) UpdatePullRequest(ctx context.Context, gitcmd git.GitInterface,
 		input.Body = nil
 	}
 
+	log.Info().Interface("input", input).Msg("UpdatePullRequest input\n")
 	_, err := c.api.UpdatePullRequest(ctx, input)
 
 	if err != nil {
