@@ -1,6 +1,7 @@
-githubRepoOwner: ejoffe
+githubRepoOwner: ricklvt
 githubRepoName: spr
 githubHost: github.com
+githubBranch: master
 requireChecks: true
 requireApproval: false
 mergeMethod: rebase
