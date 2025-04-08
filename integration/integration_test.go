@@ -173,3 +173,56 @@ func createCommits(t *testing.T, repo *git.Repository, commits []commit) {
 		require.NoError(t, err)
 	}
 }
+
+func TestBasicCommitUpdateMergeWithNoSubsetPRSets(t *testing.T) {
+	ctx := context.Background()
+	resources := initialize(t, func(c *config.Config) {
+		c.User.PRSetWorkflows = true
+	})
+	defer resources.cleanup()
+	name := prefix + t.Name()
+
+	t.Run("Starts in expected state", func(t *testing.T) {
+		resources.stackedpr.StatusCommitsAndPRSets(ctx)
+		require.Regexp(t, ".*no local commits.*", resources.sb.String())
+		resources.sb.Reset()
+	})
+
+	t.Run("New commits are shown with spr status", func(t *testing.T) {
+		createCommits(t, resources.repo, []commit{
+			{
+				filename: name + "0",
+				contents: name + "0",
+			}, {
+				filename: name + "1",
+				contents: name + "1",
+			}, {
+				filename: name + "2",
+				contents: name + "2",
+			},
+		})
+
+		resources.stackedpr.StatusCommitsAndPRSets(ctx)
+		require.Regexp(t, "2.*No Pull Request Created", resources.sb.String())
+		require.Regexp(t, "1.*No Pull Request Created", resources.sb.String())
+		require.Regexp(t, "0.*No Pull Request Created", resources.sb.String())
+		resources.sb.Reset()
+	})
+
+	t.Run("Can create PRs with spr update", func(t *testing.T) {
+		resources.stackedpr.UpdatePRSets(ctx, "0-2")
+
+		resources.stackedpr.StatusCommitsAndPRSets(ctx)
+		require.Regexp(t, "2.*s0.*github.com", resources.sb.String())
+		require.Regexp(t, "1.*s0.*github.com", resources.sb.String())
+		require.Regexp(t, "0.*s0.*github.com", resources.sb.String())
+		resources.sb.Reset()
+	})
+
+	t.Run("Can merge PRs with spr merge", func(t *testing.T) {
+		resources.stackedpr.MergePRSet(ctx, "s0")
+		resources.stackedpr.StatusCommitsAndPRSets(ctx)
+		require.Regexp(t, ".*no local commits.*", resources.sb.String())
+		resources.sb.Reset()
+	})
+}
