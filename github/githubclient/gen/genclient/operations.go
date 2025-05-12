@@ -271,6 +271,75 @@ func (c *gqlclient) AssignableUsers(ctx context.Context,
 	return data, resp.Errors
 }
 
+type PullRequestByRepoAndNumberRepository struct {
+	Name        string
+	PullRequest *PullRequestByRepoAndNumberRepositoryPullRequest
+}
+
+type PullRequestByRepoAndNumberRepositoryPullRequest struct {
+	Id          string
+	BaseRefName string
+	HeadRefName string
+	Body        string
+}
+
+// PullRequestByRepoAndNumberResponse response type for PullRequestByRepoAndNumber
+type PullRequestByRepoAndNumberResponse struct {
+	Repository *PullRequestByRepoAndNumberRepository
+}
+
+// PullRequestByRepoAndNumber from github/githubclient/queries.graphql:102
+func (c *gqlclient) PullRequestByRepoAndNumber(ctx context.Context,
+	owner string,
+	repo string,
+	number int,
+) (*PullRequestByRepoAndNumberResponse, error) {
+
+	var pullRequestByRepoAndNumberOperation string = `
+	query PullRequestByRepoAndNumber ($owner: String!, $repo: String!, $number: Int!) {
+	repository(owner: $owner, name: $repo) {
+		name
+		pullRequest(number: $number) {
+			id
+			baseRefName
+			headRefName
+			body
+		}
+	}
+}
+`
+
+	gqlreq := &client.GQLRequest{
+		OperationName: "PullRequestByRepoAndNumber",
+		Query:         pullRequestByRepoAndNumberOperation,
+		Variables: map[string]interface{}{
+			"owner":  owner,
+			"repo":   repo,
+			"number": number,
+		},
+	}
+
+	resp := &client.GQLResponse{
+		Data: &PullRequestByRepoAndNumberResponse{},
+	}
+
+	err := c.gql.Query(ctx, gqlreq, resp)
+	if err != nil {
+		return nil, err
+	}
+
+	var data *PullRequestByRepoAndNumberResponse
+	if resp.Data != nil {
+		data = resp.Data.(*PullRequestByRepoAndNumberResponse)
+	}
+
+	if resp.Errors == nil {
+		return data, nil
+	}
+
+	return data, resp.Errors
+}
+
 type CreatePullRequestCreatePullRequest struct {
 	PullRequest *CreatePullRequestCreatePullRequestPullRequest
 }
@@ -285,7 +354,7 @@ type CreatePullRequestResponse struct {
 	CreatePullRequest *CreatePullRequestCreatePullRequest
 }
 
-// CreatePullRequest from github/githubclient/queries.graphql:102
+// CreatePullRequest from github/githubclient/queries.graphql:115
 func (c *gqlclient) CreatePullRequest(ctx context.Context,
 	input CreatePullRequestInput,
 ) (*CreatePullRequestResponse, error) {
@@ -343,7 +412,7 @@ type UpdatePullRequestResponse struct {
 	UpdatePullRequest *UpdatePullRequestUpdatePullRequest
 }
 
-// UpdatePullRequest from github/githubclient/queries.graphql:115
+// UpdatePullRequest from github/githubclient/queries.graphql:128
 func (c *gqlclient) UpdatePullRequest(ctx context.Context,
 	input UpdatePullRequestInput,
 ) (*UpdatePullRequestResponse, error) {
@@ -400,7 +469,7 @@ type AddReviewersResponse struct {
 	RequestReviews *AddReviewersRequestReviews
 }
 
-// AddReviewers from github/githubclient/queries.graphql:127
+// AddReviewers from github/githubclient/queries.graphql:140
 func (c *gqlclient) AddReviewers(ctx context.Context,
 	input RequestReviewsInput,
 ) (*AddReviewersResponse, error) {
@@ -453,7 +522,7 @@ type CommentPullRequestResponse struct {
 	AddComment *CommentPullRequestAddComment
 }
 
-// CommentPullRequest from github/githubclient/queries.graphql:139
+// CommentPullRequest from github/githubclient/queries.graphql:152
 func (c *gqlclient) CommentPullRequest(ctx context.Context,
 	input AddCommentInput,
 ) (*CommentPullRequestResponse, error) {
@@ -508,7 +577,7 @@ type MergePullRequestResponse struct {
 	MergePullRequest *MergePullRequestMergePullRequest
 }
 
-// MergePullRequest from github/githubclient/queries.graphql:149
+// MergePullRequest from github/githubclient/queries.graphql:162
 func (c *gqlclient) MergePullRequest(ctx context.Context,
 	input MergePullRequestInput,
 ) (*MergePullRequestResponse, error) {
@@ -565,7 +634,7 @@ type AutoMergePullRequestResponse struct {
 	EnablePullRequestAutoMerge *AutoMergePullRequestEnablePullRequestAutoMerge
 }
 
-// AutoMergePullRequest from github/githubclient/queries.graphql:161
+// AutoMergePullRequest from github/githubclient/queries.graphql:174
 func (c *gqlclient) AutoMergePullRequest(ctx context.Context,
 	input EnablePullRequestAutoMergeInput,
 ) (*AutoMergePullRequestResponse, error) {
@@ -622,7 +691,7 @@ type ClosePullRequestResponse struct {
 	ClosePullRequest *ClosePullRequestClosePullRequest
 }
 
-// ClosePullRequest from github/githubclient/queries.graphql:173
+// ClosePullRequest from github/githubclient/queries.graphql:186
 func (c *gqlclient) ClosePullRequest(ctx context.Context,
 	input ClosePullRequestInput,
 ) (*ClosePullRequestResponse, error) {
@@ -689,7 +758,7 @@ type StarCheckResponse struct {
 	Viewer StarCheckViewer
 }
 
-// StarCheck from github/githubclient/queries.graphql:185
+// StarCheck from github/githubclient/queries.graphql:198
 func (c *gqlclient) StarCheck(ctx context.Context,
 	after *string,
 ) (*StarCheckResponse, error) {
@@ -748,7 +817,7 @@ type StarGetRepoResponse struct {
 	Repository *StarGetRepoRepository
 }
 
-// StarGetRepo from github/githubclient/queries.graphql:201
+// StarGetRepo from github/githubclient/queries.graphql:214
 func (c *gqlclient) StarGetRepo(ctx context.Context,
 	owner string,
 	name string,
@@ -801,7 +870,7 @@ type StarAddResponse struct {
 	AddStar *StarAddAddStar
 }
 
-// StarAdd from github/githubclient/queries.graphql:210
+// StarAdd from github/githubclient/queries.graphql:223
 func (c *gqlclient) StarAdd(ctx context.Context,
 	input AddStarInput,
 ) (*StarAddResponse, error) {

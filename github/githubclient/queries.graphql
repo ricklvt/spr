@@ -99,6 +99,19 @@ query AssignableUsers(
 	}
 }
 
+query PullRequestByRepoAndNumber($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    name
+    pullRequest(number: $number) {
+      id
+      baseRefName
+      headRefName
+      body
+    }
+  }
+}
+
+
 mutation CreatePullRequest(
 	$input: CreatePullRequestInput!
 ) {
